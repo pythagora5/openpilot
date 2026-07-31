@@ -3,7 +3,6 @@ import pyray as rl
 import select
 import sys
 
-from openpilot.common.branding import FORK_MODE, FORK_NAME, fork_version_label
 from openpilot.system.ui.lib.application import gui_app
 from openpilot.system.ui.lib.text_measure import measure_text_cached
 from openpilot.system.ui.text import wrap_text
@@ -16,24 +15,18 @@ if gui_app.big_ui():
   TEXTURE_SIZE = 360
   WRAPPED_SPACING = 50
   CENTERED_SPACING = 150
-  BRAND_NAME_SIZE = 92
-  BRAND_MODE_SIZE = 48
-  BRAND_VERSION_SIZE = 36
-  BRAND_TOP_GAP = 275
-  BRAND_MODE_OFFSET = 120
-  BRAND_VERSION_OFFSET = 70
+  BRAND_TEXTURE_WIDTH = 900
+  BRAND_TEXTURE_HEIGHT = 250
+  BRAND_BOTTOM_GAP = 40
 else:
   PROGRESS_BAR_WIDTH = 268
   PROGRESS_BAR_HEIGHT = 10
   TEXTURE_SIZE = 140
   WRAPPED_SPACING = 10
   CENTERED_SPACING = 20
-  BRAND_NAME_SIZE = 30
-  BRAND_MODE_SIZE = 18
-  BRAND_VERSION_SIZE = 15
-  BRAND_TOP_GAP = 80
-  BRAND_MODE_OFFSET = 42
-  BRAND_VERSION_OFFSET = 26
+  BRAND_TEXTURE_WIDTH = 300
+  BRAND_TEXTURE_HEIGHT = 83
+  BRAND_BOTTOM_GAP = 20
 DEGREES_PER_SECOND = 360.0  # one full rotation per second
 MARGIN_H = 100
 FONT_SIZE = 96
@@ -50,9 +43,10 @@ class Spinner(Widget):
     super().__init__()
     self._comma_texture = gui_app.texture("../../sunnypilot/selfdrive/assets/images/spinner_sunnypilot.png", TEXTURE_SIZE, TEXTURE_SIZE)
     self._spinner_texture = gui_app.texture("images/spinner_track.png", TEXTURE_SIZE, TEXTURE_SIZE, alpha_premultiply=True)
-    # The build spinner starts before the rest of openpilot is built. Keep all
-    # branding on the same early-safe font atlas as the stock spinner text.
-    self._brand_font = gui_app.font()
+    # The early build renderer cannot reliably measure or load fonts on-device.
+    # Render the complete wordmark as one texture to lock its font and alignment.
+    self._brand_texture = gui_app.texture("../../sunnypilot/selfdrive/assets/images/spinner_lyle_pilot.png",
+                                         BRAND_TEXTURE_WIDTH, BRAND_TEXTURE_HEIGHT)
     self._rotation = 0.0
     self._progress: int | None = None
     self._wrapped_lines: list[str] = []
@@ -106,23 +100,9 @@ class Spinner(Widget):
                         FONT_SIZE, 0.0, rl.WHITE)
 
   def _draw_branding(self, center: rl.Vector2) -> None:
-    name_size = measure_text_cached(self._brand_font, FORK_NAME, BRAND_NAME_SIZE)
-    name_y = center.y - TEXTURE_SIZE / 2 - BRAND_TOP_GAP
-    rl.draw_text_ex(self._brand_font, FORK_NAME, rl.Vector2(center.x - name_size.x / 2, name_y),
-                    BRAND_NAME_SIZE, 0.0, rl.WHITE)
-
-    mode_size = measure_text_cached(self._brand_font, FORK_MODE, BRAND_MODE_SIZE)
-    # BMFont text height can report as zero on the early Comma build screen.
-    # Use fixed, device-scaled baselines so the three lines cannot overlap.
-    mode_y = name_y + BRAND_MODE_OFFSET
-    rl.draw_text_ex(self._brand_font, FORK_MODE, rl.Vector2(center.x - mode_size.x / 2, mode_y),
-                    BRAND_MODE_SIZE, 0.0, rl.Color(0x8E, 0x96, 0x9F, 0xFF))
-
-    version = fork_version_label()
-    version_size = measure_text_cached(self._brand_font, version, BRAND_VERSION_SIZE)
-    version_y = mode_y + BRAND_VERSION_OFFSET
-    rl.draw_text_ex(self._brand_font, version, rl.Vector2(center.x - version_size.x / 2, version_y),
-                    BRAND_VERSION_SIZE, 0.0, rl.Color(0x8E, 0x96, 0x9F, 0xB0))
+    position = rl.Vector2(center.x - BRAND_TEXTURE_WIDTH / 2,
+                          center.y - TEXTURE_SIZE / 2 - BRAND_TEXTURE_HEIGHT - BRAND_BOTTOM_GAP)
+    rl.draw_texture_v(self._brand_texture, position, rl.WHITE)
 
 
 def _read_stdin():
