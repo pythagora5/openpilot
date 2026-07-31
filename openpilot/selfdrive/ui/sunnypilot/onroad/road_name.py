@@ -6,9 +6,11 @@ See the LICENSE.md file in the root directory for more details.
 """
 import pyray as rl
 
+from openpilot.common.branding import fork_signature
 from openpilot.selfdrive.ui.ui_state import ui_state
 from openpilot.system.ui.lib.application import gui_app, FontWeight
 from openpilot.system.ui.lib.text_measure import measure_text_cached
+from openpilot.system.ui.sunnypilot.lib.theme import theme
 from openpilot.system.ui.widgets import Widget
 
 
@@ -18,6 +20,7 @@ class RoadNameRenderer(Widget):
     self.road_name = ""
     self.is_metric = False
     self.font_demi = gui_app.font(FontWeight.SEMI_BOLD)
+    self.font_medium = gui_app.font(FontWeight.MEDIUM)
 
   def update(self):
     sm = ui_state.sm
@@ -31,26 +34,51 @@ class RoadNameRenderer(Widget):
       self.road_name = lmd.roadName
 
   def _render(self, rect: rl.Rectangle):
-    if not self.road_name or not ui_state.road_name_toggle:
-      return
+    bar_width = min(theme.STATUS_BAR_WIDTH, rect.width - 80)
+    bar = rl.Rectangle(
+      rect.x + (rect.width - bar_width) / 2,
+      rect.y + rect.height - theme.STATUS_BAR_HEIGHT - theme.STATUS_BAR_BOTTOM,
+      bar_width,
+      theme.STATUS_BAR_HEIGHT,
+    )
+    rl.draw_rectangle_rounded(bar, 0.22, 10, theme.GRAPHITE_TRANSLUCENT)
+    rl.draw_rectangle_rounded_lines_ex(bar, 0.22, 10, 2, theme.HAIRLINE)
 
-    text = self.road_name
-    text_size = measure_text_cached(self.font_demi, text, 46)
+    road_label = "ROAD"
+    has_road_name = self.road_name and self.road_name != "?" and ui_state.road_name_toggle
+    road_value = self.road_name if has_road_name else "--"
+    status_label = "STATUS"
+    status_value = theme.status_text(ui_state.status)
 
-    padding = 40
-    rect_width = max(200, min(text_size.x + padding, rect.width - 40))
+    road_label_x = bar.x + 120
+    road_value_x = bar.x + 310
+    status_label_x = bar.x + bar.width * 0.60
+    status_value_x = bar.x + bar.width * 0.77
+    center_y = bar.y + bar.height / 2
 
-    road_rect = rl.Rectangle(rect.x + rect.width / 2 - rect_width / 2, rect.y - 4, rect_width, 60)
+    self._draw_centered_y(road_label, road_label_x, center_y, 30, self.font_medium, theme.MUTED)
+    self._draw_centered_y(self._truncate(road_value, 420), road_value_x, center_y, 42, self.font_demi, theme.WHITE)
+    self._draw_centered_y(status_label, status_label_x, center_y, 30, self.font_medium, theme.MUTED)
+    self._draw_centered_y(status_value, status_value_x, center_y, 42, self.font_demi, theme.status_color(ui_state.status))
 
-    rl.draw_rectangle_rounded(road_rect, 0.2, 10, rl.Color(0, 0, 0, 120))
+    divider_y = bar.y + 17
+    rl.draw_line_ex(rl.Vector2(bar.x + bar.width * 0.54, divider_y),
+                    rl.Vector2(bar.x + bar.width * 0.54, bar.y + bar.height - 17), 2, theme.HAIRLINE)
 
-    max_text_width = road_rect.width - 20
-    if text_size.x > max_text_width:
-      while text_size.x > max_text_width and len(text) > 3:
-        text = text[:-1]
-        text_size = measure_text_cached(self.font_demi, text + "...", 46)
-      text = text + "..."
+    if ui_state.sm["selfdriveState"].alertSize == 0:
+      signature = fork_signature()
+      signature_size = measure_text_cached(self.font_medium, signature, 24)
+      signature_pos = rl.Vector2(rect.x + rect.width - signature_size.x - 28,
+                                 bar.y - signature_size.y - 16)
+      signature_color = rl.Color(theme.WHITE.r, theme.WHITE.g, theme.WHITE.b, 0x72)
+      rl.draw_text_ex(self.font_medium, signature, signature_pos, 24, 0, signature_color)
 
-    sz = measure_text_cached(self.font_demi, text, 46)
-    origin = rl.Vector2(road_rect.x + road_rect.width / 2 - sz.x / 2, road_rect.y + road_rect.height / 2 - sz.y / 2)
-    rl.draw_text_ex(self.font_demi, text, origin, 46, 0, rl.Color(255, 255, 255, 200))
+  def _draw_centered_y(self, text, x, center_y, size, font, color):
+    text_size = measure_text_cached(font, text, size)
+    rl.draw_text_ex(font, text, rl.Vector2(x, center_y - text_size.y / 2), size, 0, color)
+
+  def _truncate(self, text: str, max_width: float) -> str:
+    candidate = text
+    while len(candidate) > 3 and measure_text_cached(self.font_demi, candidate, 42).x > max_width:
+      candidate = candidate[:-1]
+    return f"{candidate}..." if candidate != text else candidate

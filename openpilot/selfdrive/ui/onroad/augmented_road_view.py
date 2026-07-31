@@ -10,6 +10,7 @@ from openpilot.selfdrive.ui.onroad.hud_renderer import HudRenderer
 from openpilot.selfdrive.ui.onroad.model_renderer import ModelRenderer
 from openpilot.selfdrive.ui.onroad.cameraview import CameraView
 from openpilot.system.ui.lib.application import gui_app
+from openpilot.system.ui.sunnypilot.lib.theme import theme
 from openpilot.common.transformations.camera import DEVICE_CAMERAS, DeviceCameraConfig, view_frame_from_device_frame
 from openpilot.common.transformations.orientation import rot_from_euler
 
@@ -27,9 +28,9 @@ WIDE_CAM = VisionStreamType.VISION_STREAM_WIDE_ROAD
 DEFAULT_DEVICE_CAMERA = DEVICE_CAMERAS["tici", "ar0231"]
 
 BORDER_COLORS = {
-  UIStatus.DISENGAGED: rl.Color(0x12, 0x28, 0x39, 0xFF),  # Blue for disengaged state
-  UIStatus.OVERRIDE: rl.Color(0x89, 0x92, 0x8D, 0xFF),  # Gray for override state
-  UIStatus.ENGAGED: rl.Color(0x16, 0x7F, 0x40, 0xFF),  # Green for engaged state
+  UIStatus.DISENGAGED: theme.MUTED,
+  UIStatus.OVERRIDE: theme.AMBER,
+  UIStatus.ENGAGED: theme.ACCENT,
   **BORDER_COLORS_SP,
 }
 
@@ -68,11 +69,12 @@ class AugmentedRoadView(CameraView, AugmentedRoadViewSP):
     self._update_calibration()
 
     # Create inner content area with border padding
+    border_inset = theme.ROAD_VIEW_INSET if gui_app.sunnypilot_ui() else UI_BORDER_SIZE
     self._content_rect = rl.Rectangle(
-      rect.x + UI_BORDER_SIZE,
-      rect.y + UI_BORDER_SIZE,
-      rect.width - 2 * UI_BORDER_SIZE,
-      rect.height - 2 * UI_BORDER_SIZE,
+      rect.x + border_inset,
+      rect.y + border_inset,
+      rect.width - 2 * border_inset,
+      rect.height - 2 * border_inset,
     )
 
     # Enable scissor mode to clip all rendering within content rectangle boundaries
@@ -112,6 +114,14 @@ class AugmentedRoadView(CameraView, AugmentedRoadViewSP):
     pass
 
   def _draw_border(self, rect: rl.Rectangle):
+    if gui_app.sunnypilot_ui():
+      border_color = BORDER_COLORS.get(ui_state.status, BORDER_COLORS[UIStatus.DISENGAGED])
+      rl.draw_rectangle_lines_ex(rect, theme.ROAD_VIEW_INSET, theme.INK)
+      border_rect = rl.Rectangle(rect.x + theme.ROAD_VIEW_INSET / 2, rect.y + theme.ROAD_VIEW_INSET / 2,
+                                 rect.width - theme.ROAD_VIEW_INSET, rect.height - theme.ROAD_VIEW_INSET)
+      rl.draw_rectangle_rounded_lines_ex(border_rect, 0.025, 10, theme.ROAD_BORDER_WIDTH, border_color)
+      return
+
     rl.draw_rectangle_lines_ex(rect, UI_BORDER_SIZE, rl.BLACK)
     border_roundness = 0.12
     border_color = BORDER_COLORS.get(ui_state.status, BORDER_COLORS[UIStatus.DISENGAGED])

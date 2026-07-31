@@ -3,7 +3,9 @@ import pyray as rl
 import select
 import sys
 
+from openpilot.common.branding import FORK_MODE, FORK_NAME, fork_version_label
 from openpilot.system.ui.lib.application import gui_app
+from openpilot.system.ui.lib.application import FontWeight
 from openpilot.system.ui.lib.text_measure import measure_text_cached
 from openpilot.system.ui.text import wrap_text
 from openpilot.system.ui.widgets import Widget
@@ -15,12 +17,20 @@ if gui_app.big_ui():
   TEXTURE_SIZE = 360
   WRAPPED_SPACING = 50
   CENTERED_SPACING = 150
+  BRAND_NAME_SIZE = 72
+  BRAND_MODE_SIZE = 38
+  BRAND_VERSION_SIZE = 30
+  BRAND_TOP_GAP = 205
 else:
   PROGRESS_BAR_WIDTH = 268
   PROGRESS_BAR_HEIGHT = 10
   TEXTURE_SIZE = 140
   WRAPPED_SPACING = 10
   CENTERED_SPACING = 20
+  BRAND_NAME_SIZE = 30
+  BRAND_MODE_SIZE = 18
+  BRAND_VERSION_SIZE = 15
+  BRAND_TOP_GAP = 80
 DEGREES_PER_SECOND = 360.0  # one full rotation per second
 MARGIN_H = 100
 FONT_SIZE = 96
@@ -37,6 +47,8 @@ class Spinner(Widget):
     super().__init__()
     self._comma_texture = gui_app.texture("../../sunnypilot/selfdrive/assets/images/spinner_sunnypilot.png", TEXTURE_SIZE, TEXTURE_SIZE)
     self._spinner_texture = gui_app.texture("images/spinner_track.png", TEXTURE_SIZE, TEXTURE_SIZE, alpha_premultiply=True)
+    self._brand_font = gui_app.font(FontWeight.SEMI_BOLD)
+    self._meta_font = gui_app.font(FontWeight.MEDIUM)
     self._rotation = 0.0
     self._progress: int | None = None
     self._wrapped_lines: list[str] = []
@@ -73,6 +85,7 @@ class Spinner(Widget):
                         rl.Rectangle(center.x, center.y, TEXTURE_SIZE, TEXTURE_SIZE),
                         spinner_origin, self._rotation, rl.WHITE)
     rl.draw_texture_v(self._comma_texture, comma_position, rl.WHITE)
+    self._draw_branding(center)
 
     # Display the progress bar or text based on user input
     if self._progress is not None:
@@ -86,6 +99,23 @@ class Spinner(Widget):
         text_size = measure_text_cached(gui_app.font(), line, FONT_SIZE)
         rl.draw_text_ex(gui_app.font(), line, rl.Vector2(center.x - text_size.x / 2, y_pos + i * LINE_HEIGHT),
                         FONT_SIZE, 0.0, rl.WHITE)
+
+  def _draw_branding(self, center: rl.Vector2) -> None:
+    name_size = measure_text_cached(self._brand_font, FORK_NAME, BRAND_NAME_SIZE)
+    name_y = center.y - TEXTURE_SIZE / 2 - BRAND_TOP_GAP
+    rl.draw_text_ex(self._brand_font, FORK_NAME, rl.Vector2(center.x - name_size.x / 2, name_y),
+                    BRAND_NAME_SIZE, 0.0, rl.WHITE)
+
+    mode_size = measure_text_cached(self._meta_font, FORK_MODE, BRAND_MODE_SIZE)
+    mode_y = name_y + name_size.y + (14 if gui_app.big_ui() else 5)
+    rl.draw_text_ex(self._meta_font, FORK_MODE, rl.Vector2(center.x - mode_size.x / 2, mode_y),
+                    BRAND_MODE_SIZE, 0.0, rl.Color(0x8E, 0x96, 0x9F, 0xFF))
+
+    version = fork_version_label()
+    version_size = measure_text_cached(self._meta_font, version, BRAND_VERSION_SIZE)
+    version_y = mode_y + mode_size.y + (10 if gui_app.big_ui() else 3)
+    rl.draw_text_ex(self._meta_font, version, rl.Vector2(center.x - version_size.x / 2, version_y),
+                    BRAND_VERSION_SIZE, 0.0, rl.Color(0x8E, 0x96, 0x9F, 0xB0))
 
 
 def _read_stdin():
