@@ -20,6 +20,8 @@ if gui_app.big_ui():
   BRAND_MODE_SIZE = 48
   BRAND_VERSION_SIZE = 36
   BRAND_TOP_GAP = 275
+  BRAND_MODE_OFFSET = 120
+  BRAND_VERSION_OFFSET = 70
 else:
   PROGRESS_BAR_WIDTH = 268
   PROGRESS_BAR_HEIGHT = 10
@@ -30,6 +32,8 @@ else:
   BRAND_MODE_SIZE = 18
   BRAND_VERSION_SIZE = 15
   BRAND_TOP_GAP = 80
+  BRAND_MODE_OFFSET = 42
+  BRAND_VERSION_OFFSET = 26
 DEGREES_PER_SECOND = 360.0  # one full rotation per second
 MARGIN_H = 100
 FONT_SIZE = 96
@@ -108,13 +112,15 @@ class Spinner(Widget):
                     BRAND_NAME_SIZE, 0.0, rl.WHITE)
 
     mode_size = measure_text_cached(self._brand_font, FORK_MODE, BRAND_MODE_SIZE)
-    mode_y = name_y + name_size.y + (14 if gui_app.big_ui() else 5)
+    # BMFont text height can report as zero on the early Comma build screen.
+    # Use fixed, device-scaled baselines so the three lines cannot overlap.
+    mode_y = name_y + BRAND_MODE_OFFSET
     rl.draw_text_ex(self._brand_font, FORK_MODE, rl.Vector2(center.x - mode_size.x / 2, mode_y),
                     BRAND_MODE_SIZE, 0.0, rl.Color(0x8E, 0x96, 0x9F, 0xFF))
 
     version = fork_version_label()
     version_size = measure_text_cached(self._brand_font, version, BRAND_VERSION_SIZE)
-    version_y = mode_y + mode_size.y + (10 if gui_app.big_ui() else 3)
+    version_y = mode_y + BRAND_VERSION_OFFSET
     rl.draw_text_ex(self._brand_font, version, rl.Vector2(center.x - version_size.x / 2, version_y),
                     BRAND_VERSION_SIZE, 0.0, rl.Color(0x8E, 0x96, 0x9F, 0xB0))
 
