@@ -7,6 +7,8 @@ See the LICENSE.md file in the root directory for more details.
 import pyray as rl
 
 from openpilot.common.branding import fork_signature
+from openpilot.selfdrive.ui import UI_BORDER_SIZE
+from openpilot.selfdrive.ui.onroad.driver_state import BTN_SIZE
 from openpilot.selfdrive.ui.ui_state import ui_state
 from openpilot.system.ui.lib.application import gui_app, FontWeight
 from openpilot.system.ui.lib.text_measure import measure_text_cached
@@ -68,8 +70,10 @@ class RoadNameRenderer(Widget):
     if ui_state.sm["selfdriveState"].alertSize == 0:
       signature = fork_signature()
       signature_size = measure_text_cached(self.font_medium, signature, 24)
-      signature_pos = rl.Vector2(rect.x + rect.width - signature_size.x - 28,
-                                 bar.y - signature_size.y - 16)
+      is_rhd = ui_state.sm["driverMonitoringState"].isRHD
+      bottom_offset = 28 if is_rhd else UI_BORDER_SIZE + BTN_SIZE + 28
+      signature_pos = rl.Vector2(rect.x + 28,
+                                 rect.y + rect.height - signature_size.y - bottom_offset)
       signature_color = rl.Color(theme.WHITE.r, theme.WHITE.g, theme.WHITE.b, 0x72)
       rl.draw_text_ex(self.font_medium, signature, signature_pos, 24, 0, signature_color)
 

@@ -26,7 +26,9 @@ class MinimalTheme:
   CRITICAL = rl.Color(0xC9, 0x22, 0x31, 0xFF)
 
   # Big UI / Comma 3X geometry
-  ROAD_VIEW_INSET = 8
+  # (width, alpha), ordered from the soft outer band to the crisp highlight.
+  ROAD_BORDER_LAYERS = ((16, 0x32), (10, 0x78), (4, 0xE6))
+  ROAD_VIEW_INSET = max(ROAD_BORDER_LAYERS)[0] + 2
   ROAD_BORDER_WIDTH = 3
   PANEL_RADIUS = 0.22
 

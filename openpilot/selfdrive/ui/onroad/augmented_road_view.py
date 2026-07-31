@@ -119,7 +119,16 @@ class AugmentedRoadView(CameraView, AugmentedRoadViewSP):
       rl.draw_rectangle_lines_ex(rect, theme.ROAD_VIEW_INSET, theme.INK)
       border_rect = rl.Rectangle(rect.x + theme.ROAD_VIEW_INSET / 2, rect.y + theme.ROAD_VIEW_INSET / 2,
                                  rect.width - theme.ROAD_VIEW_INSET, rect.height - theme.ROAD_VIEW_INSET)
-      rl.draw_rectangle_rounded_lines_ex(border_rect, 0.025, 10, theme.ROAD_BORDER_WIDTH, border_color)
+
+      if ui_state.status in (UIStatus.ENGAGED, UIStatus.LAT_ONLY):
+        # Composite translucent blue layers over the ink frame, ending with a
+        # crisp highlight along its centre. The inset is derived from the
+        # widest layer so the glow cannot bleed beyond the road-view rectangle.
+        for width, alpha in theme.ROAD_BORDER_LAYERS:
+          layer_color = rl.Color(border_color.r, border_color.g, border_color.b, alpha)
+          rl.draw_rectangle_rounded_lines_ex(border_rect, 0.025, 10, width, layer_color)
+      else:
+        rl.draw_rectangle_rounded_lines_ex(border_rect, 0.025, 10, theme.ROAD_BORDER_WIDTH, border_color)
       return
 
     rl.draw_rectangle_lines_ex(rect, UI_BORDER_SIZE, rl.BLACK)
