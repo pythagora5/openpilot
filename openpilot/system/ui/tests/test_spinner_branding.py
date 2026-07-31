@@ -7,6 +7,22 @@ def _base_texture(asset_path: str, width: int, height: int, **kwargs):
   return SimpleNamespace(id=1, width=width, height=height)
 
 
+def test_brand_texture_loads_for_current_version(monkeypatch):
+  loaded_assets: list[str] = []
+
+  def record_texture(asset_path: str, width: int, height: int, **kwargs):
+    loaded_assets.append(asset_path)
+    return _base_texture(asset_path, width, height, **kwargs)
+
+  monkeypatch.setattr(spinner.gui_app, "texture", record_texture)
+
+  build_spinner = spinner.Spinner()
+
+  assert spinner.fork_version_label() == spinner.BRAND_TEXTURE_VERSION
+  assert build_spinner._brand_texture is not None
+  assert any(path.endswith("spinner_lyle_pilot.png") for path in loaded_assets)
+
+
 def test_missing_brand_texture_keeps_spinner_available(monkeypatch, capsys):
   def missing_brand_texture(asset_path: str, width: int, height: int, **kwargs):
     if asset_path.endswith("spinner_lyle_pilot.png"):
