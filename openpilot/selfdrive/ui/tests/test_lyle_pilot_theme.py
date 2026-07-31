@@ -3,10 +3,60 @@ from types import SimpleNamespace
 import pyray as rl
 import pytest
 
-from openpilot.selfdrive.ui.onroad import augmented_road_view
+from openpilot.selfdrive.ui.onroad import alert_renderer, augmented_road_view
+from openpilot.selfdrive.ui.mici.onroad.alert_renderer import ALERT_STARTUP_PENDING as ALERT_STARTUP_PENDING_MICI
 from openpilot.selfdrive.ui.sunnypilot.onroad import road_name
 from openpilot.selfdrive.ui.ui_state import UIStatus
 from openpilot.system.ui.sunnypilot.lib.theme import theme
+
+
+def test_startup_pending_alert_uses_fork_name():
+  for alert in (alert_renderer.ALERT_STARTUP_PENDING, ALERT_STARTUP_PENDING_MICI):
+    assert alert.text1 == "Lyle Pilot Unavailable"
+    assert alert.text2 == "Waiting to start"
+    assert alert.size == alert_renderer.AlertSize.mid
+    assert alert.status == alert_renderer.AlertStatus.normal
+
+
+@pytest.mark.parametrize(("localized", "expected"), [
+  ("SUNNYPILOT indisponible", "Lyle Pilot indisponible"),
+  ("Service indisponible", "Lyle Pilot Unavailable"),
+])
+def test_startup_pending_brand_localization_fallback(localized, expected):
+  assert alert_renderer._brand_startup_unavailable(localized) == expected
+
+
+def test_startup_pending_path_returns_branded_alert(monkeypatch):
+  class FakeSubMaster:
+    updated = {"selfdriveState": False}
+    recv_frame = {"selfdriveState": 9}
+
+    def __getitem__(self, service):
+      assert service == "selfdriveState"
+      return SimpleNamespace(alertSize=0)
+
+  monkeypatch.setattr(alert_renderer, "ui_state", SimpleNamespace(started_frame=10, started_time=100.0))
+  monkeypatch.setattr(alert_renderer, "monotonic", lambda: 106.0)
+
+  alert = alert_renderer.AlertRenderer.get_alert(SimpleNamespace(), FakeSubMaster())
+
+  assert alert is alert_renderer.ALERT_STARTUP_PENDING
+  assert alert.text1 == "Lyle Pilot Unavailable"
+
+
+def test_startup_pending_path_waits_five_seconds(monkeypatch):
+  class FakeSubMaster:
+    updated = {"selfdriveState": False}
+    recv_frame = {"selfdriveState": 9}
+
+    def __getitem__(self, service):
+      assert service == "selfdriveState"
+      return SimpleNamespace(alertSize=0)
+
+  monkeypatch.setattr(alert_renderer, "ui_state", SimpleNamespace(started_frame=10, started_time=100.0))
+  monkeypatch.setattr(alert_renderer, "monotonic", lambda: 105.0)
+
+  assert alert_renderer.AlertRenderer.get_alert(SimpleNamespace(), FakeSubMaster()) is None
 
 
 @pytest.mark.parametrize("status", [UIStatus.ENGAGED, UIStatus.LAT_ONLY])
