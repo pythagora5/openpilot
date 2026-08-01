@@ -70,7 +70,7 @@ class Alert:
 
 # Pre-defined alert instances
 ALERT_STARTUP_PENDING = Alert(
-  text1=f"{FORK_NAME} Unavailable",
+  text1=f"{FORK_NAME} is loading...",
   text2="Waiting to start",
   size=AlertSize.mid,
   status=AlertStatus.normal,

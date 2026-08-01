@@ -26,9 +26,15 @@ class MinimalTheme:
   CRITICAL = rl.Color(0xC9, 0x22, 0x31, 0xFF)
 
   # Big UI / Comma 3X geometry
-  # (width, alpha), ordered from the soft outer band to the crisp highlight.
-  ROAD_BORDER_LAYERS = ((16, 0x32), (10, 0x78), (4, 0xE6))
-  ROAD_VIEW_INSET = max(ROAD_BORDER_LAYERS)[0] + 2
+  # (inset, width, alpha), ordered from the bezel towards the camera image.
+  # The one-pixel overlap prevents seams between the translucent bands.
+  ROAD_BORDER_FADE_BANDS = tuple(
+    (inset, 3, round(0xF2 * ((64 - inset) / 64) ** 1.35))
+    for inset in range(0, 64, 2)
+  )
+  ROAD_BORDER_FADE_WIDTH = max(inset + width for inset, width, _ in ROAD_BORDER_FADE_BANDS)
+  ROAD_BORDER_CORNER_RADIUS = 40
+  ROAD_VIEW_INSET = 18
   ROAD_BORDER_WIDTH = 3
   PANEL_RADIUS = 0.22
 

@@ -96,7 +96,7 @@ def is_stock_model(started, params, CP: car.CarParams) -> bool:
   return bool(get_active_model_runner(params, not started) == custom.ModelManagerSP.Runner.stock)
 
 def mapd_ready(started: bool, params: Params, CP: car.CarParams) -> bool:
-  return bool(os.path.exists(Paths.mapd_root()))
+  return os.path.isdir(Paths.mapd_root()) and os.path.isfile(MAPD_PATH) and os.access(MAPD_PATH, os.X_OK)
 
 def uploader_ready(started: bool, params: Params, CP: car.CarParams) -> bool:
   if not params.get_bool("OnroadUploads"):
@@ -183,7 +183,7 @@ procs += [
   PythonProcess("backup_manager", "openpilot.sunnypilot.sunnylink.backups.manager", and_(only_offroad, sunnylink_ready_shim)),
 
   # mapd
-  NativeProcess("mapd", Paths.mapd_root(), ["bash", "-c", f"{MAPD_PATH} > /dev/null 2>&1"], mapd_ready),
+  NativeProcess("mapd", Paths.mapd_root(), ["bash", "-c", f"{MAPD_PATH} > /dev/null 2>&1"], mapd_ready, restart_if_crash=True),
   PythonProcess("mapd_manager", "openpilot.sunnypilot.mapd.mapd_manager", always_run),
 
   # locationd

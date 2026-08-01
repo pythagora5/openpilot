@@ -4,9 +4,12 @@ Copyright (c) 2021-, Haibin Wen, sunnypilot, and a number of other contributors.
 This file is part of sunnypilot and is licensed under the MIT License.
 See the LICENSE.md file in the root directory for more details.
 """
+import platform
+
 import pyray as rl
 
 from openpilot.common.branding import fork_signature
+from openpilot.common.params import Params
 from openpilot.selfdrive.ui import UI_BORDER_SIZE
 from openpilot.selfdrive.ui.onroad.driver_state import BTN_SIZE
 from openpilot.selfdrive.ui.ui_state import ui_state
@@ -17,12 +20,22 @@ from openpilot.system.ui.widgets import Widget
 
 
 class RoadNameRenderer(Widget):
+  MAP_HEALTH_TEXT = {
+    "starting": "MAP STARTING",
+    "waiting_gps": "GPS ACQUIRING",
+    "tile_missing": "MAP TILE MISSING",
+    "daemon_stale": "MAP SERVICE WAITING",
+    "output_empty": "ROAD DATA EMPTY",
+  }
+
   def __init__(self):
     super().__init__()
     self.road_name = ""
     self.is_metric = False
     self.font_demi = gui_app.font(FontWeight.SEMI_BOLD)
     self.font_medium = gui_app.font(FontWeight.MEDIUM)
+    self.mem_params = Params("/dev/shm/params") if platform.system() != "Darwin" else Params()
+    self.mapd_health = "starting"
 
   def update(self):
     sm = ui_state.sm
@@ -34,6 +47,7 @@ class RoadNameRenderer(Widget):
     if sm.updated["liveMapDataSP"]:
       lmd = sm["liveMapDataSP"]
       self.road_name = lmd.roadName
+      self.mapd_health = str(self.mem_params.get("MapdHealth") or "starting")
 
   def _render(self, rect: rl.Rectangle):
     bar_width = min(theme.STATUS_BAR_WIDTH, rect.width - 80)
@@ -48,7 +62,12 @@ class RoadNameRenderer(Widget):
 
     road_label = "ROAD"
     has_road_name = self.road_name and self.road_name != "?" and ui_state.road_name_toggle
-    road_value = self.road_name if has_road_name else "--"
+    if has_road_name:
+      road_value = self.road_name
+    elif ui_state.road_name_toggle:
+      road_value = self.MAP_HEALTH_TEXT.get(self.mapd_health, "--")
+    else:
+      road_value = "--"
     status_label = "STATUS"
     status_value = theme.status_text(ui_state.status)
 
@@ -69,13 +88,14 @@ class RoadNameRenderer(Widget):
 
     if ui_state.sm["selfdriveState"].alertSize == 0:
       signature = fork_signature()
-      signature_size = measure_text_cached(self.font_medium, signature, 24)
+      signature_font_size = 30
+      signature_size = measure_text_cached(self.font_medium, signature, signature_font_size)
       is_rhd = ui_state.sm["driverMonitoringState"].isRHD
-      bottom_offset = 28 if is_rhd else UI_BORDER_SIZE + BTN_SIZE + 28
-      signature_pos = rl.Vector2(rect.x + 28,
+      bottom_offset = theme.ROAD_BORDER_FADE_WIDTH + 16 if is_rhd else UI_BORDER_SIZE + BTN_SIZE + 28
+      signature_pos = rl.Vector2(rect.x + theme.ROAD_BORDER_FADE_WIDTH + 16,
                                  rect.y + rect.height - signature_size.y - bottom_offset)
-      signature_color = rl.Color(theme.WHITE.r, theme.WHITE.g, theme.WHITE.b, 0x72)
-      rl.draw_text_ex(self.font_medium, signature, signature_pos, 24, 0, signature_color)
+      signature_color = rl.Color(theme.WHITE.r, theme.WHITE.g, theme.WHITE.b, 0xA0)
+      rl.draw_text_ex(self.font_medium, signature, signature_pos, signature_font_size, 0, signature_color)
 
   def _draw_centered_y(self, text, x, center_y, size, font, color):
     text_size = measure_text_cached(font, text, size)

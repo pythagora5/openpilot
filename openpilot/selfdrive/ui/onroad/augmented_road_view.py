@@ -117,17 +117,26 @@ class AugmentedRoadView(CameraView, AugmentedRoadViewSP):
     if gui_app.sunnypilot_ui():
       border_color = BORDER_COLORS.get(ui_state.status, BORDER_COLORS[UIStatus.DISENGAGED])
       rl.draw_rectangle_lines_ex(rect, theme.ROAD_VIEW_INSET, theme.INK)
-      border_rect = rl.Rectangle(rect.x + theme.ROAD_VIEW_INSET / 2, rect.y + theme.ROAD_VIEW_INSET / 2,
-                                 rect.width - theme.ROAD_VIEW_INSET, rect.height - theme.ROAD_VIEW_INSET)
 
-      if ui_state.status in (UIStatus.ENGAGED, UIStatus.LAT_ONLY):
-        # Composite translucent blue layers over the ink frame, ending with a
-        # crisp highlight along its centre. The inset is derived from the
-        # widest layer so the glow cannot bleed beyond the road-view rectangle.
-        for width, alpha in theme.ROAD_BORDER_LAYERS:
+      if ui_state.status in (UIStatus.ENGAGED, UIStatus.LAT_ONLY, UIStatus.OVERRIDE):
+        # Draw adjacent, slightly overlapping rings from the bezel towards the
+        # camera. Unlike several strokes on one centreline, this produces a
+        # visibly wide, directional fade without resizing the camera viewport.
+        for inset, width, alpha in theme.ROAD_BORDER_FADE_BANDS:
+          center_inset = inset + width / 2
+          layer_rect = rl.Rectangle(
+            rect.x + center_inset,
+            rect.y + center_inset,
+            rect.width - 2 * center_inset,
+            rect.height - 2 * center_inset,
+          )
+          corner_radius = max(0.0, theme.ROAD_BORDER_CORNER_RADIUS - center_inset)
+          roundness = 2 * corner_radius / min(layer_rect.width, layer_rect.height) if corner_radius else 0.0
           layer_color = rl.Color(border_color.r, border_color.g, border_color.b, alpha)
-          rl.draw_rectangle_rounded_lines_ex(border_rect, 0.025, 10, width, layer_color)
+          rl.draw_rectangle_rounded_lines_ex(layer_rect, roundness, 10, width, layer_color)
       else:
+        border_rect = rl.Rectangle(rect.x + theme.ROAD_VIEW_INSET / 2, rect.y + theme.ROAD_VIEW_INSET / 2,
+                                   rect.width - theme.ROAD_VIEW_INSET, rect.height - theme.ROAD_VIEW_INSET)
         rl.draw_rectangle_rounded_lines_ex(border_rect, 0.025, 10, theme.ROAD_BORDER_WIDTH, border_color)
       return
 

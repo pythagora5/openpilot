@@ -1,4 +1,3 @@
-import re
 from time import monotonic
 import pyray as rl
 from dataclasses import dataclass
@@ -48,16 +47,9 @@ class Alert:
   status: int = 0
 
 
-def _brand_startup_unavailable(localized_text: str) -> str:
-  upstream_brand = re.search("sunnypilot", localized_text, flags=re.IGNORECASE)
-  if upstream_brand is None:
-    return f"{FORK_NAME} Unavailable"
-  return f"{localized_text[:upstream_brand.start()]}{FORK_NAME}{localized_text[upstream_brand.end():]}"
-
-
 # Pre-defined alert instances
 ALERT_STARTUP_PENDING = Alert(
-  text1=_brand_startup_unavailable(tr("sunnypilot Unavailable")),
+  text1=f"{FORK_NAME} is loading...",
   text2=tr("Waiting to start"),
   size=AlertSize.mid,
   status=AlertStatus.normal,
