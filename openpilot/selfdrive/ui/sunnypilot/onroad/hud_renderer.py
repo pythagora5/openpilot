@@ -17,12 +17,11 @@ from openpilot.selfdrive.ui.sunnypilot.onroad.turn_signal import TurnSignalContr
 from openpilot.selfdrive.ui.sunnypilot.onroad.circular_alerts import CircularAlertsRenderer
 from openpilot.selfdrive.ui.sunnypilot.onroad.speed_renderer import SpeedRenderer
 from openpilot.selfdrive.ui.ui_state import ui_state, UIStatus
-from openpilot.selfdrive.ui.onroad.hud_renderer import HudRenderer, UI_CONFIG, CRUISE_DISABLED_CHAR
+from openpilot.selfdrive.ui.onroad.hud_renderer import HudRenderer, CRUISE_DISABLED_CHAR
 from openpilot.system.ui.lib.application import gui_app
 from openpilot.system.ui.lib.multilang import tr
 from openpilot.system.ui.lib.text_measure import measure_text_cached
 from openpilot.system.ui.sunnypilot.lib.theme import theme
-from openpilot.selfdrive.ui.sunnypilot.onroad.status_button import MinimalStatusButton
 
 class HudRendererSP(HudRenderer):
   def __init__(self):
@@ -36,7 +35,7 @@ class HudRendererSP(HudRenderer):
     self.circular_alerts_renderer = CircularAlertsRenderer()
     self.speed_renderer = SpeedRenderer()
     self._torque_bar = TorqueBar(scale=3.0, always=True)
-    self._exp_button = MinimalStatusButton(UI_CONFIG.button_size, UI_CONFIG.wheel_icon_size)
+    self._show_exp_button = False
 
     self.pcm_cruise_speed: bool = True
     self.show_icbm_status: bool = False

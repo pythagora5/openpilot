@@ -3,11 +3,48 @@ from types import SimpleNamespace
 import pyray as rl
 import pytest
 
-from openpilot.selfdrive.ui.onroad import alert_renderer, augmented_road_view
+from openpilot.selfdrive.ui.onroad import alert_renderer, augmented_road_view, hud_renderer
 from openpilot.selfdrive.ui.mici.onroad.alert_renderer import ALERT_STARTUP_PENDING as ALERT_STARTUP_PENDING_MICI
+from openpilot.selfdrive.ui.sunnypilot.onroad import hud_renderer as hud_renderer_sp
 from openpilot.selfdrive.ui.sunnypilot.onroad import road_name
 from openpilot.selfdrive.ui.ui_state import UIStatus
 from openpilot.system.ui.sunnypilot.lib.theme import theme
+
+
+def test_sunnypilot_driving_hud_disables_experimental_status_ring(monkeypatch):
+  class DummyRenderer:
+    def __init__(self, *args, **kwargs):
+      pass
+
+  monkeypatch.setattr(hud_renderer.HudRenderer, "__init__", lambda self: setattr(self, "_show_exp_button", True))
+  for renderer_name in (
+    "DeveloperUiRenderer", "RoadNameRenderer", "RocketFuel", "SpeedLimitRenderer",
+    "SmartCruiseControlRenderer", "TurnSignalController", "CircularAlertsRenderer",
+    "SpeedRenderer", "TorqueBar",
+  ):
+    monkeypatch.setattr(hud_renderer_sp, renderer_name, DummyRenderer)
+
+  renderer = hud_renderer_sp.HudRendererSP()
+
+  assert renderer._show_exp_button is False
+  assert renderer.user_interacting() is False
+
+
+def test_hidden_experimental_button_is_not_rendered_or_interactive(monkeypatch):
+  renderer = hud_renderer.HudRenderer.__new__(hud_renderer.HudRenderer)
+  renderer.is_cruise_available = False
+  renderer._show_exp_button = False
+  renderer._exp_button = SimpleNamespace(
+    is_pressed=True,
+    render=lambda rect: pytest.fail("hidden experimental button was rendered"),
+  )
+
+  monkeypatch.setattr(renderer, "_draw_current_speed", lambda rect: None)
+  monkeypatch.setattr(hud_renderer.rl, "draw_rectangle_gradient_v", lambda *args: None)
+
+  renderer._render(rl.Rectangle(0, 0, 2160, 1080))
+
+  assert renderer.user_interacting() is False
 
 
 def test_startup_pending_alert_uses_fork_name():
