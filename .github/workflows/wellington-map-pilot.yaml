@@ -1,0 +1,53 @@
+name: Wellington map-data pilot
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - lyle-pilot-v0.1.0
+    paths:
+      - .github/workflows/wellington-map-pilot.yaml
+      - tools/map_data/wellington/**
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+
+    steps:
+      - name: Check out Lyle Pilot
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Install pinned build dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y \
+            ca-certificates curl git golang-go gzip osmium-tool pkg-config tar zlib1g-dev
+          dpkg-query -W \
+            ca-certificates curl git golang-go gzip osmium-tool pkg-config tar zlib1g-dev \
+            | tee "${RUNNER_TEMP}/installed-packages.txt"
+
+      - name: Build and validate Wellington map data
+        env:
+          WELLINGTON_WORK_DIR: ${{ runner.temp }}/wellington-map
+        run: |
+          set -euo pipefail
+          gofmt -d tools/map_data/wellington/wellington_validation_test.go \
+            | tee "${RUNNER_TEMP}/gofmt.diff"
+          test ! -s "${RUNNER_TEMP}/gofmt.diff"
+          chmod +x tools/map_data/wellington/build_wellington_map.sh
+          tools/map_data/wellington/build_wellington_map.sh
+          cp "${RUNNER_TEMP}/installed-packages.txt" \
+            "${RUNNER_TEMP}/wellington-map/output/installed-packages.txt"
+
+      - name: Upload gated pilot artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: lyle-pilot-wellington-map-v1
+          path: ${{ runner.temp }}/wellington-map/output/
+          if-no-files-found: error
+          retention-days: 30
