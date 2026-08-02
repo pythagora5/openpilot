@@ -40,7 +40,7 @@ fi
 
 curl --fail --location --retry 5 --output "${WORK_DIR}/new-zealand.osm.pbf" "${PBF_URL}"
 printf '%s  %s\n' "${PBF_MD5}" "${WORK_DIR}/new-zealand.osm.pbf" | md5sum --check --strict
-sha256sum "${WORK_DIR}/new-zealand.osm.pbf" > "${OUTPUT_DIR}/new-zealand.osm.pbf.sha256"
+(cd "${WORK_DIR}" && sha256sum new-zealand.osm.pbf) > "${OUTPUT_DIR}/new-zealand.osm.pbf.sha256"
 osmium fileinfo --extended "${WORK_DIR}/new-zealand.osm.pbf" > "${OUTPUT_DIR}/source-fileinfo.txt"
 
 rm -f "${WORK_DIR}/filtered.osm.pbf" "${WORK_DIR}/box.osm.pbf" "${MAPD_DIR}/map.osm.pbf"
@@ -122,7 +122,7 @@ pack_archive "${OUTPUT_DIR}/${ARCHIVE_NAME}.reproducibility-check"
 cmp "${OUTPUT_DIR}/${ARCHIVE_NAME}" "${OUTPUT_DIR}/${ARCHIVE_NAME}.reproducibility-check"
 rm "${OUTPUT_DIR}/${ARCHIVE_NAME}.reproducibility-check"
 
-sha256sum "${OUTPUT_DIR}/${ARCHIVE_NAME}" > "${OUTPUT_DIR}/${ARCHIVE_NAME}.sha256"
+(cd "${OUTPUT_DIR}" && sha256sum "${ARCHIVE_NAME}") > "${OUTPUT_DIR}/${ARCHIVE_NAME}.sha256"
 tar -tzvf "${OUTPUT_DIR}/${ARCHIVE_NAME}" > "${OUTPUT_DIR}/archive-members.txt"
 
 {

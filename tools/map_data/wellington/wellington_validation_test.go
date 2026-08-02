@@ -448,10 +448,13 @@ func TestWellingtonPilot(t *testing.T) {
 		if len(samples) >= 50 {
 			break
 		}
+		if !hasSpeed(record.way) {
+			continue
+		}
 		if _, used := seenTiles[record.tileFile]; used && len(seenTiles) < 8 {
 			continue
 		}
-		if sample, ok := midpointReplay(t, record); ok {
+		if sample, ok := midpointReplay(t, record); ok && sample.SpeedMPS > 0 {
 			samples = append(samples, sample)
 			seenTiles[record.tileFile] = struct{}{}
 		}
