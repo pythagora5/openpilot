@@ -34,6 +34,11 @@ def parse_args() -> argparse.Namespace:
   parser.add_argument("output_dir", type=pathlib.Path)
   parser.add_argument("--as-of", help="ISO-8601 timestamp; defaults to now in UTC")
   parser.add_argument("--max-samples", type=int, default=50)
+  parser.add_argument(
+    "--dispositions",
+    type=pathlib.Path,
+    help="Reviewed mismatch dispositions. Every entry must match one NSLR mismatch exactly.",
+  )
   return parser.parse_args()
 
 
@@ -130,6 +135,58 @@ def compare_sample(sample: dict, as_of_ms: int) -> dict:
   }
 
 
+def disposition_key(result: dict) -> tuple[str, str, str, int, tuple[int, ...]]:
+  return (
+    f"{float(result['latitude']):.5f}",
+    f"{float(result['longitude']):.5f}",
+    str(result["road_name"]),
+    int(result["mapd_speed_kph"]),
+    tuple(int(value) for value in result["nslr_current_values_kph"]),
+  )
+
+
+def apply_dispositions(results: list[dict], path: pathlib.Path | None) -> tuple[int, int]:
+  if path is None:
+    mismatch_count = sum(result["status"] == "mismatch" for result in results)
+    return 0, mismatch_count
+
+  payload = json.loads(path.read_text(encoding="utf-8"))
+  entries = payload.get("dispositions")
+  if not isinstance(entries, list):
+    raise RuntimeError("Disposition file must contain a 'dispositions' list")
+
+  by_key = {}
+  for entry in entries:
+    key = disposition_key(entry)
+    if key in by_key:
+      raise RuntimeError(f"Duplicate disposition for {key}")
+    if not entry.get("classification") or not entry.get("rationale"):
+      raise RuntimeError(f"Disposition for {key} needs classification and rationale")
+    by_key[key] = entry
+
+  used = set()
+  for result in results:
+    if result["status"] != "mismatch":
+      continue
+    key = disposition_key(result)
+    disposition = by_key.get(key)
+    if disposition is not None:
+      result["review_disposition"] = {
+        field: disposition[field]
+        for field in ("classification", "rationale", "pilot_decision", "evidence")
+        if field in disposition
+      }
+      used.add(key)
+
+  unused = set(by_key) - used
+  if unused:
+    raise RuntimeError(f"Disposition entries did not match an NSLR mismatch: {sorted(unused)}")
+
+  reviewed = len(used)
+  mismatches = sum(result["status"] == "mismatch" for result in results)
+  return reviewed, mismatches - reviewed
+
+
 def write_csv(path: pathlib.Path, results: list[dict]) -> None:
   with path.open("w", newline="", encoding="utf-8") as file:
     writer = csv.writer(file)
@@ -166,6 +223,8 @@ def main() -> int:
   for result in results:
     counts[result["status"]] = counts.get(result["status"], 0) + 1
 
+  reviewed_conflicts, undispositioned_conflicts = apply_dispositions(results, args.dispositions)
+
   output = {
     "query_timestamp_utc": as_of.isoformat(),
     "nslr_query_url": NSLR_QUERY_URL,
@@ -177,7 +236,8 @@ def main() -> int:
     ),
     "sample_count": len(results),
     "status_counts": counts,
-    "undispositioned_conflict_count": counts.get("mismatch", 0),
+    "reviewed_conflict_count": reviewed_conflicts,
+    "undispositioned_conflict_count": undispositioned_conflicts,
     "results": results,
   }
   args.output_dir.mkdir(parents=True, exist_ok=True)
@@ -187,7 +247,7 @@ def main() -> int:
   write_csv(args.output_dir / "nslr-comparison.csv", results)
 
   print(json.dumps({"sample_count": len(results), "status_counts": counts}, sort_keys=True))
-  return 1 if counts.get("mismatch", 0) else 0
+  return 1 if undispositioned_conflicts else 0
 
 
 if __name__ == "__main__":

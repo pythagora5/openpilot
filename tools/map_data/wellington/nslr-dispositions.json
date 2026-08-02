@@ -1,0 +1,48 @@
+{
+  "scope": "Manual, informational-only Wellington pilot archive v1",
+  "reviewed_at_utc": "2026-08-02T03:15:00Z",
+  "dispositions": [
+    {
+      "latitude": -41.3181117,
+      "longitude": 174.80178905,
+      "road_name": "Kemp Street",
+      "mapd_speed_kph": 50,
+      "nslr_current_values_kph": [30],
+      "classification": "unresolved_source_conflict",
+      "rationale": "The 2026-08-01 OpenStreetMap source tags Kemp Street as 50 km/h, while the current NZTA NSLR record for this Kemp Street segment is 30 km/h. The pilot does not overwrite either source or claim that the map value is legally authoritative.",
+      "pilot_decision": "Retain the OSM-derived value only for this manual informational pilot, prominently document the conflict, require Speed Limit mode Information (not Warning or Assist), keep Smart Cruise Control map input off, and require the driver to obey posted signs. Resolve the source data before any permanent distribution.",
+      "evidence": [
+        "https://api.openstreetmap.org/api/0.6/way/334266271.json",
+        "https://www.arcgis.com/home/item.html?id=aa376f1f2f3643bdac4d18855229239c"
+      ]
+    },
+    {
+      "latitude": -41.1168,
+      "longitude": 174.8938605,
+      "road_name": "Newhaven Way",
+      "mapd_speed_kph": 10,
+      "nslr_current_values_kph": [50],
+      "classification": "private_road_context",
+      "rationale": "The selected OpenStreetMap way is a private-access road tagged 10 km/h. The intersecting NSLR value is the generic 50 km/h Porirua urban traffic area polygon and does not express this private local restriction.",
+      "pilot_decision": "Retain the more specific OSM private-road value for this informational pilot; do not treat the generic polygon comparison as a legal correction.",
+      "evidence": [
+        "https://api.openstreetmap.org/api/0.6/way/1016029447.json",
+        "https://www.arcgis.com/home/item.html?id=aa376f1f2f3643bdac4d18855229239c"
+      ]
+    },
+    {
+      "latitude": -40.9886682,
+      "longitude": 174.9525002,
+      "road_name": "",
+      "mapd_speed_kph": 30,
+      "nslr_current_values_kph": [70],
+      "classification": "interchange_overlap_ambiguity",
+      "rationale": "The sample lies at the Paekakariki SH59 and Beach Road interchange. Map matching selected an overlapping unnamed local tertiary/link way tagged 30 km/h, while the point-in-polygon NSLR query returned the SH59 70 km/h zone. A coordinate-only polygon comparison cannot resolve the road level and direction at this interchange.",
+      "pilot_decision": "Retain the map-matched local-road result for this informational pilot and document the geometric ambiguity. Validate this location against signage before any permanent distribution.",
+      "evidence": [
+        "https://www.openstreetmap.org/?mlat=-40.9886682&mlon=174.9525002#map=19/-40.9886682/174.9525002",
+        "https://www.arcgis.com/home/item.html?id=aa376f1f2f3643bdac4d18855229239c"
+      ]
+    }
+  ]
+}
