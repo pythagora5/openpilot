@@ -42,8 +42,9 @@ class MinimalTheme:
   SET_SPEED_WIDTH_METRIC = 174
   SET_SPEED_WIDTH_IMPERIAL = 160
   SET_SPEED_HEIGHT = 184
-  SET_SPEED_X = 42
   SET_SPEED_Y = 38
+  HUD_CLUSTER_RIGHT_MARGIN = 42
+  HUD_CLUSTER_GAP = 42
   STATUS_BAR_WIDTH = 1420
   STATUS_BAR_HEIGHT = 82
   STATUS_BAR_BOTTOM = 30
@@ -71,6 +72,15 @@ class MinimalTheme:
   @classmethod
   def status_color(cls, status) -> rl.Color:
     return cls.STATUS_COLORS.get(status.value, cls.MUTED)
+
+  @classmethod
+  def hud_cluster_x(cls, rect: rl.Rectangle, set_speed_width: float, speed_limit_width: float,
+                    speed_limit_visual_width: float) -> tuple[float, float]:
+    """Return MAX and speed-limit x positions for the top-right HUD cluster."""
+    speed_limit_overflow = max(0.0, (speed_limit_visual_width - speed_limit_width) / 2)
+    speed_limit_x = rect.x + rect.width - cls.HUD_CLUSTER_RIGHT_MARGIN - speed_limit_width - speed_limit_overflow
+    set_speed_x = speed_limit_x - cls.HUD_CLUSTER_GAP - set_speed_width
+    return set_speed_x, speed_limit_x
 
 
 theme = MinimalTheme

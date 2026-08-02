@@ -4,6 +4,7 @@ Copyright (c) 2021-, Haibin Wen, sunnypilot, and a number of other contributors.
 This file is part of sunnypilot and is licensed under the MIT License.
 See the LICENSE.md file in the root directory for more details.
 """
+
 import pyray as rl
 
 from openpilot.common.constants import CV
@@ -11,17 +12,18 @@ from openpilot.selfdrive.ui.mici.onroad.torque_bar import TorqueBar
 from openpilot.selfdrive.ui.sunnypilot.onroad.developer_ui import DeveloperUiRenderer, DeveloperUiState, get_bottom_dev_ui_offset
 from openpilot.selfdrive.ui.sunnypilot.onroad.road_name import RoadNameRenderer
 from openpilot.selfdrive.ui.sunnypilot.onroad.rocket_fuel import RocketFuel
-from openpilot.selfdrive.ui.sunnypilot.onroad.speed_limit import SpeedLimitRenderer
+from openpilot.selfdrive.ui.sunnypilot.onroad.speed_limit import METRIC_SPEED_LIMIT_DIAMETER, SpeedLimitRenderer
 from openpilot.selfdrive.ui.sunnypilot.onroad.smart_cruise_control import SmartCruiseControlRenderer
 from openpilot.selfdrive.ui.sunnypilot.onroad.turn_signal import TurnSignalController
 from openpilot.selfdrive.ui.sunnypilot.onroad.circular_alerts import CircularAlertsRenderer
 from openpilot.selfdrive.ui.sunnypilot.onroad.speed_renderer import SpeedRenderer
 from openpilot.selfdrive.ui.ui_state import ui_state, UIStatus
-from openpilot.selfdrive.ui.onroad.hud_renderer import HudRenderer, CRUISE_DISABLED_CHAR
+from openpilot.selfdrive.ui.onroad.hud_renderer import HudRenderer, CRUISE_DISABLED_CHAR, UI_CONFIG
 from openpilot.system.ui.lib.application import gui_app
 from openpilot.system.ui.lib.multilang import tr
 from openpilot.system.ui.lib.text_measure import measure_text_cached
 from openpilot.system.ui.sunnypilot.lib.theme import theme
+
 
 class HudRendererSP(HudRenderer):
   def __init__(self):
@@ -77,7 +79,9 @@ class HudRendererSP(HudRenderer):
     self._get_icbm_status()
 
     set_speed_width = theme.SET_SPEED_WIDTH_METRIC if ui_state.is_metric else theme.SET_SPEED_WIDTH_IMPERIAL
-    x = rect.x + theme.SET_SPEED_X
+    speed_limit_width = UI_CONFIG.set_speed_width_metric if ui_state.is_metric else UI_CONFIG.set_speed_width_imperial
+    speed_limit_visual_width = METRIC_SPEED_LIMIT_DIAMETER if ui_state.is_metric else speed_limit_width
+    x, _ = theme.hud_cluster_x(rect, set_speed_width, speed_limit_width, speed_limit_visual_width)
     y = rect.y + theme.SET_SPEED_Y
 
     set_speed_rect = rl.Rectangle(x, y, set_speed_width, theme.SET_SPEED_HEIGHT)

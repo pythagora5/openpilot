@@ -6,7 +6,7 @@ import pytest
 from openpilot.selfdrive.ui.onroad import alert_renderer, augmented_road_view, hud_renderer
 from openpilot.selfdrive.ui.mici.onroad.alert_renderer import ALERT_STARTUP_PENDING as ALERT_STARTUP_PENDING_MICI
 from openpilot.selfdrive.ui.sunnypilot.onroad import hud_renderer as hud_renderer_sp
-from openpilot.selfdrive.ui.sunnypilot.onroad import road_name, turn_signal
+from openpilot.selfdrive.ui.sunnypilot.onroad import road_name, speed_limit, turn_signal
 from openpilot.selfdrive.ui.mici.onroad.alert_renderer import IconSide
 from openpilot.selfdrive.ui.ui_state import UIStatus
 from openpilot.system.ui.sunnypilot.lib.theme import theme
@@ -48,12 +48,81 @@ def test_hidden_experimental_button_is_not_rendered_or_interactive(monkeypatch):
   assert renderer.user_interacting() is False
 
 
+@pytest.mark.parametrize("is_metric", (True, False))
+def test_max_and_speed_limit_cluster_is_anchored_top_right(monkeypatch, is_metric):
+  max_panels = []
+  speed_limit_panels = []
+  rect = rl.Rectangle(18, 18, 2124, 1044)
+
+  max_renderer = hud_renderer_sp.HudRendererSP.__new__(hud_renderer_sp.HudRendererSP)
+  max_renderer.is_cruise_set = False
+  max_renderer.set_speed = 0
+  max_renderer.show_icbm_status = False
+  max_renderer._font_semi_bold = object()
+  max_renderer._font_bold = object()
+  max_renderer._get_icbm_status = lambda: None
+
+  speed_renderer = speed_limit.SpeedLimitRenderer.__new__(speed_limit.SpeedLimitRenderer)
+  speed_renderer._pre_active_fade = SimpleNamespace(alpha=1.0)
+  speed_renderer.speed_limit_assist_state = speed_limit.AssistState.disabled
+  speed_renderer._draw_sign_main = lambda panel, alpha: speed_limit_panels.append(panel)
+  speed_renderer._draw_ahead_info = lambda panel: None
+
+  fake_ui_state = SimpleNamespace(
+    is_metric=is_metric,
+    speed_limit_mode=speed_limit.SpeedLimitMode.information,
+    status=UIStatus.DISENGAGED,
+    sm={
+      "longitudinalPlanSP": SimpleNamespace(speedLimit=SimpleNamespace(assist=SimpleNamespace(active=False))),
+      "carControl": SimpleNamespace(cruiseControl=SimpleNamespace(override=False)),
+    },
+  )
+  monkeypatch.setattr(hud_renderer_sp, "ui_state", fake_ui_state)
+  monkeypatch.setattr(speed_limit, "ui_state", fake_ui_state)
+  monkeypatch.setattr(hud_renderer_sp, "measure_text_cached", lambda *args: rl.Vector2(40, 40))
+  monkeypatch.setattr(hud_renderer_sp.rl, "draw_rectangle_rounded", lambda panel, *args: max_panels.append(panel))
+  monkeypatch.setattr(hud_renderer_sp.rl, "draw_rectangle_rounded_lines_ex", lambda *args: None)
+  monkeypatch.setattr(hud_renderer_sp.rl, "draw_text_ex", lambda *args: None)
+
+  max_renderer._draw_set_speed(rect)
+  speed_renderer._render(rect)
+
+  max_panel = max_panels[0]
+  speed_limit_panel = speed_limit_panels[0]
+  visual_width = speed_limit.METRIC_SPEED_LIMIT_DIAMETER if is_metric else speed_limit_panel.width
+  visual_right = speed_limit_panel.x + speed_limit_panel.width / 2 + visual_width / 2
+  visual_left = speed_limit_panel.x + speed_limit_panel.width / 2 - visual_width / 2
+
+  assert max_panel.x + max_panel.width < visual_left
+  assert visual_right == rect.x + rect.width - theme.HUD_CLUSTER_RIGHT_MARGIN
+  assert max_panel.x > rect.x + rect.width / 2
+
+
+def test_top_right_speed_assist_arrow_draws_below_sign(monkeypatch):
+  draws = []
+  renderer = speed_limit.SpeedLimitRenderer.__new__(speed_limit.SpeedLimitRenderer)
+  renderer.arrow_blank = object()
+  arrow = SimpleNamespace(width=200, height=200)
+  monkeypatch.setattr(speed_limit.SpeedLimitAlertRenderer, "speed_limit_pre_active_icon_helper",
+                      lambda self: (IconSide.right, arrow, 255, 10, 18))
+  monkeypatch.setattr(speed_limit.rl, "draw_texture_ex", lambda texture, pos, *args: draws.append((texture, pos)))
+
+  sign_rect = rl.Rectangle(1891, 39, 200, 216)
+  renderer._draw_pre_active_arrow(sign_rect)
+
+  texture, position = draws[0]
+  assert texture is arrow
+  assert position.x == sign_rect.x
+  assert position.y > sign_rect.y + sign_rect.height
+
+
 def test_startup_pending_alert_uses_fork_name():
   for alert in (alert_renderer.ALERT_STARTUP_PENDING, ALERT_STARTUP_PENDING_MICI):
     assert alert.text1 == "Lyle Pilot is loading..."
     assert alert.text2 == "Waiting to start"
     assert alert.size == alert_renderer.AlertSize.mid
     assert alert.status == alert_renderer.AlertStatus.normal
+
 
 def test_startup_pending_path_returns_branded_alert(monkeypatch):
   class FakeSubMaster:

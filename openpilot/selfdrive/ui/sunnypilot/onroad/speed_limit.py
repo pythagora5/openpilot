@@ -18,6 +18,7 @@ from openpilot.common.hardware import HARDWARE
 from openpilot.system.ui.lib.application import gui_app, FontWeight
 from openpilot.system.ui.lib.multilang import tr
 from openpilot.system.ui.lib.text_measure import measure_text_cached
+from openpilot.system.ui.sunnypilot.lib.theme import theme
 from openpilot.system.ui.sunnypilot.lib.utils import AlertFadeAnimator
 from openpilot.system.ui.widgets import Widget
 
@@ -185,7 +186,9 @@ class SpeedLimitRenderer(Widget, SpeedLimitAlertRenderer):
 
   def _render(self, rect: rl.Rectangle):
     width = UI_CONFIG.set_speed_width_metric if ui_state.is_metric else UI_CONFIG.set_speed_width_imperial
-    x = rect.x + 60 + width + 30 - 6
+    set_speed_width = theme.SET_SPEED_WIDTH_METRIC if ui_state.is_metric else theme.SET_SPEED_WIDTH_IMPERIAL
+    visual_width = METRIC_SPEED_LIMIT_DIAMETER if ui_state.is_metric else width
+    _, x = theme.hud_cluster_x(rect, set_speed_width, width, visual_width)
     y = rect.y + 45 - 6
 
     sign_rect = rl.Rectangle(x, y, width, UI_CONFIG.set_speed_height + 6 * 2)
@@ -226,8 +229,8 @@ class SpeedLimitRenderer(Widget, SpeedLimitAlertRenderer):
     if icon_alpha > 0 and txt_icon != self.arrow_blank:
       sign_margin = 12
       arrow_spacing = int(sign_margin * 1.4)
-      arrow_x = sign_rect.x + sign_rect.width + arrow_spacing
-      arrow_y = sign_rect.y + (sign_rect.height - txt_icon.height) / 2
+      arrow_x = sign_rect.x + (sign_rect.width - txt_icon.width) / 2
+      arrow_y = sign_rect.y + sign_rect.height + arrow_spacing
       color = rl.Color(255, 255, 255, int(icon_alpha))
       rl.draw_texture_ex(txt_icon, rl.Vector2(arrow_x, arrow_y), 0.0, 1.0, color)
 
