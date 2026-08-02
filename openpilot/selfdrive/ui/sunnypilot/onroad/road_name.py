@@ -13,10 +13,14 @@ from openpilot.common.params import Params
 from openpilot.selfdrive.ui import UI_BORDER_SIZE
 from openpilot.selfdrive.ui.onroad.driver_state import BTN_SIZE
 from openpilot.selfdrive.ui.ui_state import ui_state
+from openpilot.selfdrive.ui.sunnypilot.onroad.speed_limit import METRIC_SPEED_LIMIT_DIAMETER
 from openpilot.system.ui.lib.application import gui_app, FontWeight
 from openpilot.system.ui.lib.text_measure import measure_text_cached
 from openpilot.system.ui.sunnypilot.lib.theme import theme
 from openpilot.system.ui.widgets import Widget
+
+VEHICLE_LOGO_SIZE = METRIC_SPEED_LIMIT_DIAMETER
+VEHICLE_LOGO_GAP = 18
 
 
 class RoadNameRenderer(Widget):
@@ -24,6 +28,7 @@ class RoadNameRenderer(Widget):
     "starting": "MAP STARTING",
     "waiting_gps": "GPS ACQUIRING",
     "tile_missing": "MAP TILE MISSING",
+    "tile_empty": "MAP TILE EMPTY",
     "daemon_stale": "MAP SERVICE WAITING",
     "output_empty": "ROAD DATA EMPTY",
   }
@@ -34,6 +39,11 @@ class RoadNameRenderer(Widget):
     self.is_metric = False
     self.font_demi = gui_app.font(FontWeight.SEMI_BOLD)
     self.font_medium = gui_app.font(FontWeight.MEDIUM)
+    self.vehicle_logo = gui_app.texture(
+      "../../sunnypilot/selfdrive/assets/images/ram_logo_circle_1024.png",
+      VEHICLE_LOGO_SIZE,
+      VEHICLE_LOGO_SIZE,
+    )
     self.mem_params = Params("/dev/shm/params") if platform.system() != "Darwin" else Params()
     self.mapd_health = "starting"
 
@@ -95,6 +105,8 @@ class RoadNameRenderer(Widget):
       signature_pos = rl.Vector2(rect.x + theme.ROAD_BORDER_FADE_WIDTH + 16,
                                  rect.y + rect.height - signature_size.y - bottom_offset)
       signature_color = rl.Color(theme.WHITE.r, theme.WHITE.g, theme.WHITE.b, 0xA0)
+      logo_pos = rl.Vector2(signature_pos.x, signature_pos.y - VEHICLE_LOGO_GAP - VEHICLE_LOGO_SIZE)
+      rl.draw_texture_ex(self.vehicle_logo, logo_pos, 0.0, 1.0, rl.WHITE)
       rl.draw_text_ex(self.font_medium, signature, signature_pos, signature_font_size, 0, signature_color)
 
   def _draw_centered_y(self, text, x, center_y, size, font, color):

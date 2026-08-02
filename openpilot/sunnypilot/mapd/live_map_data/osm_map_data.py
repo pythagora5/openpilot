@@ -18,6 +18,9 @@ from openpilot.sunnypilot.mapd.live_map_data.base_map_data import BaseMapData
 from openpilot.sunnypilot.navd.helpers import Coordinate
 
 MAPD_OUTPUT_STALE_SECONDS = 4.0
+# A valid Cap'n Proto tile containing map features is larger than its tiny
+# header-only container. The current NZ downloads are 35-37 byte empty files.
+MIN_MAP_TILE_BYTES = 64
 
 
 class OsmMapData(BaseMapData):
@@ -59,8 +62,11 @@ class OsmMapData(BaseMapData):
     if not self.localizer_valid or self.last_position is None:
       return "waiting_gps"
 
-    if not self._current_map_tile_exists():
+    tile_size = self._current_map_tile_size()
+    if tile_size == 0:
       return "tile_missing"
+    if tile_size < MIN_MAP_TILE_BYTES:
+      return "tile_empty"
 
     road_name_path = Path(self.mem_params.get_param_path("RoadName"))
     try:
@@ -75,9 +81,9 @@ class OsmMapData(BaseMapData):
 
     return "ok" if self.get_current_road_name() else "output_empty"
 
-  def _current_map_tile_exists(self) -> bool:
+  def _current_map_tile_size(self) -> int:
     if self.last_position is None:
-      return False
+      return 0
 
     area_min_lat = math.floor(self.last_position.latitude * 4) / 4
     area_min_lon = math.floor(self.last_position.longitude * 4) / 4
@@ -87,9 +93,9 @@ class OsmMapData(BaseMapData):
       f"{area_min_lat:.6f}_{area_min_lon:.6f}_{area_min_lat + 0.25:.6f}_{area_min_lon + 0.25:.6f}"
     )
     try:
-      return tile.is_file() and os.path.getsize(tile) > 0
+      return os.path.getsize(tile) if tile.is_file() else 0
     except OSError:
-      return False
+      return 0
 
   def tick(self) -> None:
     super().tick()

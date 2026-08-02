@@ -21,6 +21,8 @@ from openpilot.system.ui.lib.text_measure import measure_text_cached
 from openpilot.system.ui.sunnypilot.lib.utils import AlertFadeAnimator
 from openpilot.system.ui.widgets import Widget
 
+METRIC_SPEED_LIMIT_DIAMETER = UI_CONFIG.set_speed_width_metric + 18
+
 METER_TO_FOOT = 3.28084
 METER_TO_MILE = 0.000621371
 AHEAD_THRESHOLD = 5
@@ -231,7 +233,7 @@ class SpeedLimitRenderer(Widget, SpeedLimitAlertRenderer):
 
   def _render_vienna(self, rect, val, sub, color, has_limit, alpha=1.0):
     center = rl.Vector2(rect.x + rect.width / 2, rect.y + rect.height / 2)
-    radius = (rect.width + 18) / 2
+    radius = METRIC_SPEED_LIMIT_DIAMETER / 2
 
     white = rl.color_alpha(Colors.WHITE, alpha)
     red = rl.color_alpha(Colors.RED, alpha)

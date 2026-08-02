@@ -2,7 +2,7 @@ from pathlib import Path
 
 from openpilot.common.hardware.hw import Paths
 from openpilot.sunnypilot.mapd.live_map_data import osm_map_data
-from openpilot.sunnypilot.mapd.live_map_data.osm_map_data import MAPD_OUTPUT_STALE_SECONDS, OsmMapData
+from openpilot.sunnypilot.mapd.live_map_data.osm_map_data import MAPD_OUTPUT_STALE_SECONDS, MIN_MAP_TILE_BYTES, OsmMapData
 from openpilot.sunnypilot.navd.helpers import Coordinate
 from openpilot.system.manager.process_config import managed_processes
 
@@ -34,8 +34,8 @@ def make_map_data(tmp_path: Path, monkeypatch, road_name: str = "") -> OsmMapDat
 def create_current_tile(map_data: OsmMapData, tmp_path: Path) -> None:
   tile = tmp_path / "osm/offline/-42/174/-41.500000_174.750000_-41.250000_175.000000"
   tile.parent.mkdir(parents=True)
-  tile.write_bytes(b"map data")
-  assert map_data._current_map_tile_exists()
+  tile.write_bytes(b"map data".ljust(MIN_MAP_TILE_BYTES, b"\0"))
+  assert map_data._current_map_tile_size() == MIN_MAP_TILE_BYTES
 
 
 def create_road_output(tmp_path: Path) -> Path:
@@ -58,6 +58,16 @@ def test_map_health_waits_for_valid_gps(tmp_path, monkeypatch):
 def test_map_health_reports_missing_current_tile(tmp_path, monkeypatch):
   map_data = make_map_data(tmp_path, monkeypatch)
   assert map_data.get_health() == "tile_missing"
+
+
+def test_map_health_reports_header_only_current_tile(tmp_path, monkeypatch):
+  map_data = make_map_data(tmp_path, monkeypatch)
+  tile = tmp_path / "osm/offline/-42/174/-41.500000_174.750000_-41.250000_175.000000"
+  tile.parent.mkdir(parents=True)
+  tile.write_bytes(b"empty Cap'n Proto tile".ljust(36, b"\0"))
+
+  assert map_data._current_map_tile_size() == 36
+  assert map_data.get_health() == "tile_empty"
 
 
 def test_map_health_reports_stale_daemon_output(tmp_path, monkeypatch):

@@ -6,7 +6,8 @@ import pytest
 from openpilot.selfdrive.ui.onroad import alert_renderer, augmented_road_view, hud_renderer
 from openpilot.selfdrive.ui.mici.onroad.alert_renderer import ALERT_STARTUP_PENDING as ALERT_STARTUP_PENDING_MICI
 from openpilot.selfdrive.ui.sunnypilot.onroad import hud_renderer as hud_renderer_sp
-from openpilot.selfdrive.ui.sunnypilot.onroad import road_name
+from openpilot.selfdrive.ui.sunnypilot.onroad import road_name, turn_signal
+from openpilot.selfdrive.ui.mici.onroad.alert_renderer import IconSide
 from openpilot.selfdrive.ui.ui_state import UIStatus
 from openpilot.system.ui.sunnypilot.lib.theme import theme
 
@@ -139,10 +140,12 @@ def test_override_border_uses_wide_amber_gradient(monkeypatch):
 
 def test_signature_is_anchored_to_bottom_left(monkeypatch):
   text_draws = []
+  texture_draws = []
   renderer = road_name.RoadNameRenderer.__new__(road_name.RoadNameRenderer)
   renderer.road_name = "Test Road"
   renderer.font_demi = object()
   renderer.font_medium = object()
+  renderer.vehicle_logo = object()
 
   fake_ui_state = SimpleNamespace(
     road_name_toggle=True,
@@ -159,6 +162,8 @@ def test_signature_is_anchored_to_bottom_left(monkeypatch):
   monkeypatch.setattr(road_name.rl, "draw_line_ex", lambda *args: None)
   monkeypatch.setattr(road_name.rl, "draw_text_ex",
                       lambda font, text, pos, size, spacing, color: text_draws.append((text, pos)))
+  monkeypatch.setattr(road_name.rl, "draw_texture_ex",
+                      lambda texture, pos, rotation, scale, color: texture_draws.append((texture, pos, scale)))
 
   rect = rl.Rectangle(18, 18, 2124, 1044)
   renderer._render(rect)
@@ -170,6 +175,13 @@ def test_signature_is_anchored_to_bottom_left(monkeypatch):
   bar_width = min(theme.STATUS_BAR_WIDTH, rect.width - 80)
   bar_x = rect.x + (rect.width - bar_width) / 2
   assert position.x + 125 < bar_x
+  assert len(texture_draws) == 1
+  texture, logo_position, scale = texture_draws[0]
+  assert texture is renderer.vehicle_logo
+  assert logo_position.x == position.x
+  assert logo_position.y == position.y - road_name.VEHICLE_LOGO_GAP - road_name.VEHICLE_LOGO_SIZE
+  assert scale == 1.0
+  assert road_name.VEHICLE_LOGO_SIZE == 218
 
 
 def test_signature_draws_without_road_name_and_clears_lhd_driver_icon(monkeypatch):
@@ -178,6 +190,7 @@ def test_signature_draws_without_road_name_and_clears_lhd_driver_icon(monkeypatc
   renderer.road_name = ""
   renderer.font_demi = object()
   renderer.font_medium = object()
+  renderer.vehicle_logo = object()
 
   fake_ui_state = SimpleNamespace(
     road_name_toggle=False,
@@ -194,6 +207,7 @@ def test_signature_draws_without_road_name_and_clears_lhd_driver_icon(monkeypatc
   monkeypatch.setattr(road_name.rl, "draw_line_ex", lambda *args: None)
   monkeypatch.setattr(road_name.rl, "draw_text_ex",
                       lambda font, text, pos, size, spacing, color: text_draws.append((text, pos)))
+  monkeypatch.setattr(road_name.rl, "draw_texture_ex", lambda *args: None)
 
   rect = rl.Rectangle(18, 18, 2124, 1044)
   renderer._render(rect)
@@ -231,3 +245,55 @@ def test_missing_road_name_shows_coordinate_free_map_health(monkeypatch):
   renderer._render(rl.Rectangle(18, 18, 2124, 1044))
 
   assert "MAP TILE MISSING" in text_draws
+
+
+def test_empty_map_tile_has_specific_health_message():
+  assert road_name.RoadNameRenderer.MAP_HEALTH_TEXT["tile_empty"] == "MAP TILE EMPTY"
+
+
+def test_vehicle_logo_is_hidden_during_alerts(monkeypatch):
+  renderer = road_name.RoadNameRenderer.__new__(road_name.RoadNameRenderer)
+  renderer.road_name = "Test Road"
+  renderer.font_demi = object()
+  renderer.font_medium = object()
+  renderer.vehicle_logo = object()
+
+  fake_ui_state = SimpleNamespace(
+    road_name_toggle=True,
+    status=UIStatus.ENGAGED,
+    sm={
+      "selfdriveState": SimpleNamespace(alertSize=1),
+      "driverMonitoringState": SimpleNamespace(isRHD=True),
+    },
+  )
+  monkeypatch.setattr(road_name, "ui_state", fake_ui_state)
+  monkeypatch.setattr(road_name, "measure_text_cached", lambda font, text, size: rl.Vector2(125, size))
+  monkeypatch.setattr(road_name.rl, "draw_rectangle_rounded", lambda *args: None)
+  monkeypatch.setattr(road_name.rl, "draw_rectangle_rounded_lines_ex", lambda *args: None)
+  monkeypatch.setattr(road_name.rl, "draw_line_ex", lambda *args: None)
+  monkeypatch.setattr(road_name.rl, "draw_text_ex", lambda *args: None)
+  monkeypatch.setattr(road_name.rl, "draw_texture_ex",
+                      lambda *args: pytest.fail("vehicle logo was drawn over an active alert"))
+
+  renderer._render(rl.Rectangle(18, 18, 2124, 1044))
+
+
+def test_turn_and_blind_spot_icons_are_twice_the_original_size(monkeypatch):
+  texture_loads = []
+
+  def fake_texture(path, width, height, **kwargs):
+    texture_loads.append((path, width, height, kwargs.get("flip_x", False)))
+    return SimpleNamespace(width=width, height=height)
+
+  monkeypatch.setattr(turn_signal.gui_app, "texture", fake_texture)
+  widget = turn_signal.TurnSignalWidget(IconSide.left)
+
+  assert widget._signal_texture.width == 240
+  assert widget._signal_texture.height == 218
+  assert widget._blind_spot_texture.width == 240
+  assert widget._blind_spot_texture.height == 218
+  assert turn_signal.TurnSignalConfig().size == 300
+  assert texture_loads == [
+    ("icons_mici/onroad/turn_signal_left.png", 240, 218, False),
+    ("icons_mici/onroad/blind_spot_left.png", 240, 218, False),
+  ]
