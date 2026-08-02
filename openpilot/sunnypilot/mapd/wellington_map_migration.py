@@ -287,8 +287,9 @@ def install_wellington_map(
       and len(set(marker_names)) == expected_file_count
       and target.is_dir()
     ):
+      expected_marker_names = {name for name in marker_names if isinstance(name, str)}
       try:
-        _validate_group(target, set(marker_names), expected_file_count, expected_group_digest)
+        _validate_group(target, expected_marker_names, expected_file_count, expected_group_digest)
       except MigrationError:
         pass
       else:
