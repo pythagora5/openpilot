@@ -2,7 +2,7 @@
 
 ## Result
 
-The archive passed structural, decoder, map-matching, boundary, reproducibility, and path-safety checks. It is suitable for a stationary comma 3X pilot followed by cautious informational-only road testing. It is not a legally authoritative speed-limit database.
+The archive passed structural, decoder, map-matching, boundary, reproducibility, and path-safety checks. It is ready for on-device Wellington testing. It is not a legally authoritative speed-limit database.
 
 ## Archive and tile checks
 
@@ -32,7 +32,7 @@ The complete query evidence is in `nslr-comparison.json` and `nslr-comparison.cs
 ### Reviewed mismatches
 
 1. **Kemp Street — mapd/OSM 50 km/h; NSLR 30 km/h.** Live OSM way `334266271` remains tagged 50 km/h while the current NSLR record identifies the relevant Kemp Street segment as 30 km/h. This is an unresolved source conflict and a known pilot limitation. Posted signs take precedence. It must be resolved before permanent distribution.
-2. **Newhaven Way — mapd/OSM 10 km/h; NSLR 50 km/h.** Live OSM way `1016029447` is private access and tagged 10 km/h. The NSLR result is a generic Porirua urban-area polygon. The more specific private-road value is retained for this informational pilot.
+2. **Newhaven Way — mapd/OSM 10 km/h; NSLR 50 km/h.** Live OSM way `1016029447` is private access and tagged 10 km/h. The NSLR result is a generic Porirua urban-area polygon. The more specific private-road value is retained for this pilot.
 3. **Paekakariki SH59/Beach Road interchange — mapd 30 km/h; NSLR 70 km/h.** The map matcher selected an overlapping local tertiary/link way while the coordinate-only NSLR polygon query returned the SH59 zone. This is a road-level/interchange geometry ambiguity, not evidence that either road's source value should be overwritten.
 
 ## Limits of validation
@@ -43,4 +43,4 @@ The complete query evidence is in `nslr-comparison.json` and `nslr-comparison.cs
 - Road data can become stale after the 2026-08-01 OSM snapshot.
 - On-device testing is still required to confirm the released binary reads these files correctly on a comma 3X.
 
-During the pilot, Lyle Pilot's Speed Limit mode must remain **Information**, not Warning or Assist, and Smart Cruise Control map input must remain off. The driver must obey current posted signs and remain responsible for vehicle control.
+The automatic migration leaves all speed-limit and Smart Cruise Control settings unchanged. The known source-data limits above therefore apply to whichever existing settings are enabled during on-device testing.

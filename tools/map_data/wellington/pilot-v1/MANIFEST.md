@@ -1,6 +1,6 @@
 # Lyle Pilot Wellington map archive v1
 
-This is a temporary, manual-install pilot archive for Lyle Pilot. It is not part of the normal sunnypilot map downloader and must not be treated as a permanent distribution mechanism.
+This is a versioned Wellington pilot archive bundled directly with Lyle Pilot. The `lyle-pilot-v0.1.0` branch installs it locally during device startup after a normal Software UI update. It is independent of the sunnypilot map downloader and is not the permanent map-data distribution design.
 
 ## Release identity
 
@@ -11,6 +11,11 @@ This is a temporary, manual-install pilot archive for Lyle Pilot. It is not part
 - Intended device: comma 3X running the `lyle-pilot-v0.1.0` branch
 - Tile group installed: `/data/media/0/osm/offline/-42/174`
 - Geographic group extent: latitude `[-42, -40)`, longitude `[174, 176)`
+- Automatic migration: `openpilot/sunnypilot/mapd/wellington_map_migration.py`
+- Installation marker: `/data/media/0/osm/.lyle-pilot-wellington-map-v1.installed.json`
+- Retained prior group: `/data/media/0/osm/offline/-42/174.lyle-pilot-wellington-map-v1.backup`
+
+The migration reads only this bundled archive. It does not download map data, trigger an upstream downloader, or read or write speed-limit and Smart Cruise Control settings.
 
 ## Sources
 

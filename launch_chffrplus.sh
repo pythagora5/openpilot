@@ -81,6 +81,9 @@ function launch {
   # hardware specific init
   if [ -f /AGNOS ]; then
     agnos_init
+    if ! PYTHONPATH="$DIR" python3 "$DIR/openpilot/sunnypilot/mapd/wellington_map_migration.py"; then
+      echo "Lyle Pilot Wellington map migration failed; continuing with existing map data"
+    fi
   fi
 
   # write tmux scrollback to a file

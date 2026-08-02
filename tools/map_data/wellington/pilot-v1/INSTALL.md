@@ -1,4 +1,8 @@
-# Manual comma 3X pilot installation
+# Superseded manual comma 3X fallback
+
+This is the procedure shipped with the earlier `wellington-map-v1.0.0` release asset. It is retained as historical fallback documentation and is not used by the current Lyle Pilot branch. The supported current path is the normal device Software UI flow documented in `AUTOMATIC_UPDATE.md`.
+
+Unlike the current automatic migration, this legacy script changes speed-limit and Smart Cruise Control parameters. Do not use it when the requirement is to preserve the device's existing cruise settings.
 
 This procedure is intentionally manual and reversible. Do it only while the vehicle is parked, ignition is off, the comma 3X is at its home screen, and the device has reliable power. Do not perform it during a drive.
 
