@@ -5,6 +5,7 @@ This file is part of sunnypilot and is licensed under the MIT License.
 See the LICENSE.md file in the root directory for more details.
 """
 import platform
+import time
 
 import pyray as rl
 
@@ -21,6 +22,14 @@ from openpilot.system.ui.widgets import Widget
 
 VEHICLE_LOGO_SIZE = METRIC_SPEED_LIMIT_DIAMETER
 VEHICLE_LOGO_GAP = 18
+
+LC_DEBOUNCE_SECONDS = 0.5
+
+LC_STATUS = {
+  "activeCentering": ("● CENTERING", theme.ACCENT_SOFT),
+  "standbyE2e": ("E2E", theme.MUTED),
+  "paused": ("PAUSED", theme.AMBER),
+}
 
 
 class RoadNameRenderer(Widget):
@@ -46,6 +55,9 @@ class RoadNameRenderer(Widget):
     )
     self.mem_params = Params("/dev/shm/params") if platform.system() != "Darwin" else Params()
     self.mapd_health = "starting"
+    self._lc_raw_state = "disabled"
+    self._lc_display_state = "disabled"
+    self._lc_state_changed_at = 0.0
 
   def update(self):
     sm = ui_state.sm
@@ -58,6 +70,20 @@ class RoadNameRenderer(Widget):
       lmd = sm["liveMapDataSP"]
       self.road_name = lmd.roadName
       self.mapd_health = str(self.mem_params.get("MapdHealth") or "starting")
+
+    if sm.updated["carControlSP"]:
+      new_state = sm["carControlSP"].laneCentering.state
+      if new_state != self._lc_raw_state:
+        self._lc_raw_state = new_state
+        self._lc_state_changed_at = time.monotonic()
+      if time.monotonic() - self._lc_state_changed_at >= LC_DEBOUNCE_SECONDS:
+        self._lc_display_state = self._lc_raw_state
+
+  def _lane_centering_status(self):
+    base_status = ui_state.status.value
+    if base_status in ("disengaged", "override", "long_only"):
+      return None
+    return LC_STATUS.get(self._lc_display_state)
 
   def _render(self, rect: rl.Rectangle):
     bar_width = min(theme.STATUS_BAR_WIDTH, rect.width - 80)
@@ -79,7 +105,13 @@ class RoadNameRenderer(Widget):
     else:
       road_value = "--"
     status_label = "STATUS"
-    status_value = theme.status_text(ui_state.status)
+
+    lc_override = self._lane_centering_status()
+    if lc_override is not None:
+      status_value, status_color = lc_override
+    else:
+      status_value = theme.status_text(ui_state.status)
+      status_color = theme.status_color(ui_state.status)
 
     road_label_x = bar.x + 120
     road_value_x = bar.x + 310
@@ -90,7 +122,7 @@ class RoadNameRenderer(Widget):
     self._draw_centered_y(road_label, road_label_x, center_y, 30, self.font_medium, theme.MUTED)
     self._draw_centered_y(self._truncate(road_value, 420), road_value_x, center_y, 42, self.font_demi, theme.WHITE)
     self._draw_centered_y(status_label, status_label_x, center_y, 30, self.font_medium, theme.MUTED)
-    self._draw_centered_y(status_value, status_value_x, center_y, 42, self.font_demi, theme.status_color(ui_state.status))
+    self._draw_centered_y(status_value, status_value_x, center_y, 42, self.font_demi, status_color)
 
     divider_y = bar.y + 17
     rl.draw_line_ex(rl.Vector2(bar.x + bar.width * 0.54, divider_y),

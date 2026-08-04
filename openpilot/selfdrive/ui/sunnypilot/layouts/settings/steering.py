@@ -81,6 +81,38 @@ class SteeringLayout(Widget):
       description=lambda: tr("Delay before lateral control resumes after the turn signal ends."),
       label_callback=lambda delay: f'{delay} {"s"}'
     )
+    self._lane_centering_toggle = toggle_item_sp(
+      param="LaneCentering",
+      title=lambda: tr("Lane Centering"),
+      description=lambda: tr("Nudge steering toward the centre of detected lane lines. " +
+                             "Default off. Requires two confident lane lines, plausible lane width, and minimum speed."),
+    )
+    self._lane_center_offset = option_item_sp(
+      param="LaneCenterOffset",
+      title=lambda: tr("Lane Center Offset"),
+      min_value=-30,
+      max_value=30,
+      value_change_step=5,
+      description=lambda: tr("Shift the target position left or right within the lane."),
+      label_callback=lambda x: f"{x / 100:.2f} m",
+      use_float_scaling=True,
+    )
+    self._e2e_authority = option_item_sp(
+      param="LaneCenteringE2EAuthority",
+      title=lambda: tr("E2E Authority"),
+      min_value=0,
+      max_value=100,
+      value_change_step=5,
+      description=lambda: tr("How much the model's own path reduces the lane-centering correction " +
+                             "when it is confident. 0% = lane lines only, 100% = model can fully override."),
+      label_callback=lambda x: f"{x}%",
+      use_float_scaling=True,
+    )
+    self._pause_on_signal_toggle = toggle_item_sp(
+      param="LaneCenteringPauseOnSignal",
+      title=lambda: tr("Pause on Turn Signal"),
+      description=lambda: tr("Fade out the lane-centering correction while a turn signal is active."),
+    )
     self._torque_control_toggle = toggle_item_sp(
       param="EnforceTorqueControl",
       title=lambda: tr("Enforce Torque Lateral Control"),
@@ -107,6 +139,11 @@ class SteeringLayout(Widget):
       self._blinker_control_options,
       self._blinker_reengage_delay,
       LineSeparatorSP(40),
+      self._lane_centering_toggle,
+      self._lane_center_offset,
+      self._e2e_authority,
+      self._pause_on_signal_toggle,
+      LineSeparatorSP(40),
       self._torque_control_toggle,
       self._torque_customization_button,
       LineSeparatorSP(40),
@@ -131,6 +168,11 @@ class SteeringLayout(Widget):
     self._mads_settings_button.action_item.set_enabled(ui_state.is_offroad() and self._mads_toggle.action_item.get_state())
     self._blinker_control_options.set_visible(self._blinker_control_toggle.action_item.get_state())
     self._blinker_reengage_delay.set_visible(self._blinker_control_toggle.action_item.get_state())
+
+    lc_enabled = self._lane_centering_toggle.action_item.get_state()
+    self._lane_center_offset.set_visible(lc_enabled)
+    self._e2e_authority.set_visible(lc_enabled)
+    self._pause_on_signal_toggle.set_visible(lc_enabled)
 
     enforce_torque_enabled = self._torque_control_toggle.action_item.get_state()
     nnlc_enabled = self._nnlc_toggle.action_item.get_state()

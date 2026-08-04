@@ -16,6 +16,7 @@ from openpilot.sunnypilot import PARAMS_UPDATE_PERIOD
 from openpilot.sunnypilot.livedelay.helpers import get_lat_delay
 from openpilot.sunnypilot.modeld_v2.modeld_base import ModelStateBase
 from openpilot.sunnypilot.selfdrive.controls.lib.blinker_pause_lateral import BlinkerPauseLateral
+from openpilot.sunnypilot.selfdrive.controls.lib.lane_centering import LaneCenteringController, LaneCenteringResult, LaneCenteringSettings, LaneCenteringState
 from openpilot.sunnypilot.selfdrive.controls.lib.latcontrol_torque_v0 import LatControlTorque as LatControlTorqueV0
 
 
@@ -26,6 +27,9 @@ class ControlsExt(ModelStateBase):
     self.params = params
     self._param_update_time: float = 0.0
     self.blinker_pause_lateral = BlinkerPauseLateral()
+    self.lane_centering = LaneCenteringController()
+    self.lane_centering_settings = LaneCenteringSettings()
+    self.lane_centering_result = LaneCenteringResult(0.0, 0.0, LaneCenteringState.DISABLED)
 
     cloudlog.info("controlsd_ext is waiting for CarParamsSP")
     self.CP_SP = messaging.log_from_bytes(params.get("CarParamsSP", block=True), custom.CarParamsSP)
@@ -50,6 +54,7 @@ class ControlsExt(ModelStateBase):
   def get_params_sp(self, sm: messaging.SubMaster) -> None:
     if time.monotonic() - self._param_update_time > PARAMS_UPDATE_PERIOD:
       self.blinker_pause_lateral.get_params()
+      self.lane_centering_settings = LaneCenteringSettings.from_params(self.params)
 
       if self.CP.lateralTuning.which() == 'torque':
         self.lat_delay = get_lat_delay(self.params, sm["liveDelay"].lateralDelay)
@@ -103,6 +108,17 @@ class ControlsExt(ModelStateBase):
     CC_SP.intelligentCruiseButtonManagement.state = icbm_src.state
     CC_SP.intelligentCruiseButtonManagement.sendButton = icbm_src.sendButton
     CC_SP.intelligentCruiseButtonManagement.vTarget = icbm_src.vTarget
+
+    # Lane centering state
+    lc = self.lane_centering_result
+    CC_SP.laneCentering.state = {
+      LaneCenteringState.DISABLED: 'disabled',
+      LaneCenteringState.STANDBY_E2E: 'standbyE2e',
+      LaneCenteringState.ACTIVE_CENTERING: 'activeCentering',
+      LaneCenteringState.PAUSED: 'paused',
+    }.get(lc.state, 'disabled')
+    CC_SP.laneCentering.correction = lc.correction
+    CC_SP.laneCentering.desiredCurvature = lc.desired_curvature
 
     return CC_SP
 

@@ -63,5 +63,8 @@ def convert_carControlSP(struct: capnp.lib.capnp._DynamicStructReader) -> struct
   struct_dataclass.intelligentCruiseButtonManagement = structs.IntelligentCruiseButtonManagement(
     **remove_deprecated(struct_dict.get('intelligentCruiseButtonManagement', {}))
   )
+  struct_dataclass.laneCentering = structs.LaneCentering(
+    **remove_deprecated(struct_dict.get('laneCentering', {}))
+  )
 
   return struct_dataclass
