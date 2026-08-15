@@ -138,6 +138,10 @@ def setup_update_available(available: bool = True) -> None:
     params.remove("UpdaterTargetBranch")
 
 
+def setup_always_offroad(enabled: bool) -> None:
+  Params().put_bool("OffroadMode", enabled, block=True)
+
+
 def setup_calibration_params() -> None:
   params = Params()
   # live calibration
@@ -177,11 +181,18 @@ def send_onroad(pm: PubMaster) -> None:
   pm.send('pandaStates', ps)
 
 
-def make_network_state_setup(pm: PubMaster, network_type) -> Callable:
+def make_always_offroad_home_setup(pm: PubMaster) -> Callable:
+  """Keep the replay offroad with ignition on so the new Home action is visible."""
   def _send() -> None:
     ds = messaging.new_message('deviceState')
-    ds.deviceState.networkType = network_type
+    ds.deviceState.networkType = log.DeviceState.NetworkType.wifi
+
+    ps = messaging.new_message('pandaStates', 1)
+    ps.pandaStates[0].pandaType = log.PandaState.PandaType.dos
+    ps.pandaStates[0].ignitionLine = True
+
     pm.send('deviceState', ds)
+    pm.send('pandaStates', ps)
   return _send
 
 
@@ -392,7 +403,13 @@ def build_tizi_script(pm: PubMaster, main_layout, script: Script) -> None:
     return setup
 
   def add_prime_state_setup(prime_type: PrimeType) -> None:
-    script.set_send(lambda: set_prime_state(prime_type))
+    home_sender = make_always_offroad_home_setup(pm)
+
+    def _send() -> None:
+      home_sender()
+      set_prime_state(prime_type)
+
+    script.set_send(_send)
 
   def do_onboarding() -> None:
     """Click through the training guide and close."""
@@ -422,7 +439,8 @@ def build_tizi_script(pm: PubMaster, main_layout, script: Script) -> None:
   # TODO: Better way of organizing the events
 
   # === Homescreen ===
-  script.set_send(make_network_state_setup(pm, log.DeviceState.NetworkType.wifi))
+  script.setup(lambda: setup_always_offroad(True), wait_after=0)
+  script.set_send(make_always_offroad_home_setup(pm))
   # Go through different prime state layouts
   add_prime_state_setup(PrimeType.LITE)
   add_prime_state_setup(PrimeType.NONE)
@@ -436,6 +454,7 @@ def build_tizi_script(pm: PubMaster, main_layout, script: Script) -> None:
   script.click(620, 950)  # close alerts
 
   # === Settings (click sidebar settings button) ===
+  script.setup(lambda: setup_always_offroad(False))
   script.click(150, 90)
 
   # === Settings - Device ===

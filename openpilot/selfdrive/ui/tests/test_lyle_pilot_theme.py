@@ -3,13 +3,194 @@ from types import SimpleNamespace
 import pyray as rl
 import pytest
 
+from openpilot.selfdrive.ui.layouts import home as home_layout
+from openpilot.selfdrive.ui.layouts import main as main_layout
 from openpilot.selfdrive.ui.onroad import alert_renderer, augmented_road_view, hud_renderer
 from openpilot.selfdrive.ui.mici.onroad.alert_renderer import ALERT_STARTUP_PENDING as ALERT_STARTUP_PENDING_MICI
+from openpilot.selfdrive.ui.sunnypilot import ui_state as ui_state_sp
 from openpilot.selfdrive.ui.sunnypilot.onroad import hud_renderer as hud_renderer_sp
 from openpilot.selfdrive.ui.sunnypilot.onroad import road_name, speed_limit, turn_signal
 from openpilot.selfdrive.ui.mici.onroad.alert_renderer import IconSide
 from openpilot.selfdrive.ui.ui_state import UIStatus
 from openpilot.system.ui.sunnypilot.lib.theme import theme
+
+
+class FakeParams:
+  def __init__(self, offroad_mode=True, boot_mode=1):
+    self.offroad_mode = offroad_mode
+    self.boot_mode = boot_mode
+    self.put_calls = []
+
+  def get_bool(self, key):
+    return self.offroad_mode if key == "OffroadMode" else False
+
+  def get(self, key, return_default=False):
+    return self.boot_mode if key == "DeviceBootMode" else None
+
+  def put_bool(self, key, value, **kwargs):
+    self.put_calls.append((key, value, kwargs))
+    if key == "OffroadMode":
+      self.offroad_mode = value
+
+
+def make_onroad_button(state, params=None, clock=lambda: 10.0):
+  button = home_layout.OnroadModeButton.__new__(home_layout.OnroadModeButton)
+  home_layout.Widget.__init__(button)
+  button.params = params or FakeParams(state.always_offroad)
+  button.ui_state = state
+  button.clock = clock
+  button.request_started_at = None
+  button.button_state = home_layout.OnroadButtonState.ENABLED
+  return button
+
+
+def test_always_offroad_state_exists_before_first_param_refresh(monkeypatch):
+  fake_params = FakeParams(offroad_mode=True, boot_mode=1)
+  monkeypatch.setattr(ui_state_sp, "Params", lambda: fake_params)
+  monkeypatch.setattr(ui_state_sp, "SunnylinkState", lambda: object())
+
+  state = ui_state_sp.UIStateSP()
+
+  assert state.always_offroad is True
+  assert state.boot_offroad_mode == 1
+
+
+@pytest.mark.parametrize(
+  ("always_offroad", "ignition", "expected_state", "enabled"),
+  [
+    (True, True, home_layout.OnroadButtonState.START, True),
+    (True, False, home_layout.OnroadButtonState.IGNITION_REQUIRED, False),
+    (False, True, home_layout.OnroadButtonState.STARTING, False),
+    (False, False, home_layout.OnroadButtonState.ENABLED, False),
+  ],
+)
+def test_onroad_button_states(monkeypatch, always_offroad, ignition, expected_state, enabled):
+  state = SimpleNamespace(always_offroad=always_offroad, ignition=ignition, started=False)
+  button = make_onroad_button(state)
+  styles = []
+  monkeypatch.setattr(home_layout.Button, "set_text", lambda self, text: None)
+  monkeypatch.setattr(home_layout.Button, "set_button_style", lambda self, style: styles.append(style))
+  monkeypatch.setattr(home_layout.Button, "_update_state", lambda self: None)
+
+  button._update_state()
+
+  assert button.button_state == expected_state
+  assert button.enabled is enabled
+  assert button.actionable is enabled
+  assert styles == [home_layout.ButtonStyle.PRIMARY if enabled else home_layout.ButtonStyle.NO_EFFECT]
+
+
+def test_onroad_button_makes_one_nonblocking_request():
+  now = [10.0]
+  params = FakeParams(offroad_mode=True)
+  state = SimpleNamespace(always_offroad=True, ignition=True, started=False)
+  button = make_onroad_button(state, params=params, clock=lambda: now[0])
+  button.button_state = home_layout.OnroadButtonState.START
+
+  button._request_onroad()
+  button._request_onroad()
+
+  assert params.put_calls == [("OffroadMode", False, {})]
+  assert state.always_offroad is False
+  assert button._get_button_state() == home_layout.OnroadButtonState.STARTING
+
+  now[0] += home_layout.STARTUP_TIMEOUT
+  assert button._get_button_state() == home_layout.OnroadButtonState.CHECK_ALERTS
+
+
+def test_onroad_button_recovers_if_always_offroad_returns():
+  now = [10.0]
+  state = SimpleNamespace(always_offroad=True, ignition=True, started=False)
+  button = make_onroad_button(state, clock=lambda: now[0])
+  button.button_state = home_layout.OnroadButtonState.START
+  button._request_onroad()
+
+  state.always_offroad = True
+  now[0] += home_layout.OFFROAD_REVERT_GRACE
+
+  assert button._get_button_state() == home_layout.OnroadButtonState.START
+  assert button.request_started_at is None
+
+
+def test_onroad_button_clears_request_on_successful_transition():
+  state = SimpleNamespace(always_offroad=False, ignition=True, started=True)
+  button = make_onroad_button(state)
+  button.request_started_at = 10.0
+
+  button._handle_offroad_transition()
+
+  assert button.request_started_at is None
+
+
+def test_onroad_button_does_not_show_delayed_alert_after_ignition_loss():
+  now = [20.0]
+  state = SimpleNamespace(always_offroad=False, ignition=False, started=False)
+  button = make_onroad_button(state, clock=lambda: now[0])
+  button.request_started_at = 10.0
+
+  assert button._get_button_state() == home_layout.OnroadButtonState.ENABLED
+  assert button.request_started_at is None
+
+
+def test_home_action_is_large_and_right_aligned():
+  class RenderRecorder:
+    def __init__(self):
+      self.rect = None
+
+    def render(self, rect):
+      self.rect = rect
+
+  layout = home_layout.HomeLayout.__new__(home_layout.HomeLayout)
+  layout._rect = rl.Rectangle(300, 0, 1860, 1080)
+  layout.update_available = False
+  layout.header_rect = rl.Rectangle(0, 0, 0, 0)
+  layout.content_rect = rl.Rectangle(0, 0, 0, 0)
+  layout.right_column_rect = rl.Rectangle(0, 0, 0, 0)
+  layout.update_notif_rect = rl.Rectangle(0, 0, 200, home_layout.HEADER_HEIGHT - 10)
+  layout.alert_notif_rect = rl.Rectangle(0, 0, 220, home_layout.HEADER_HEIGHT - 10)
+  layout._exp_mode_button = RenderRecorder()
+  layout._onroad_mode_button = RenderRecorder()
+
+  layout._update_state()
+  layout._render_right_column()
+
+  action_rect = layout._onroad_mode_button.rect
+  assert action_rect.x >= 2160 / 2
+  assert action_rect.width == home_layout.RIGHT_COLUMN_WIDTH
+  assert action_rect.height >= 500
+  assert not hasattr(home_layout, "PrimeWidget")
+  assert not hasattr(home_layout, "SetupWidget")
+
+
+def test_main_callbacks_do_not_require_removed_setup_widget(monkeypatch):
+  class FakeSidebar:
+    def set_callbacks(self, **kwargs):
+      self.callbacks = kwargs
+
+  class FakeLayout:
+    def set_settings_callback(self, callback):
+      self.settings_callback = callback
+
+    def set_callbacks(self, **kwargs):
+      self.callbacks = kwargs
+
+    def set_click_callback(self, callback):
+      self.click_callback = callback
+
+  layout = main_layout.MainLayout.__new__(main_layout.MainLayout)
+  layout._sidebar = FakeSidebar()
+  layout._home_body_layout = FakeLayout()
+  layout._layouts = {
+    main_layout.MainState.HOME: FakeLayout(),
+    main_layout.MainState.SETTINGS: FakeLayout(),
+    main_layout.MainState.ONROAD: FakeLayout(),
+  }
+  monkeypatch.setattr(main_layout.device, "add_interactive_timeout_callback", lambda callback: None)
+  monkeypatch.setattr(main_layout.ui_state, "add_on_body_changed_callbacks", lambda callback: None)
+
+  layout._setup_callbacks()
+
+  assert callable(layout._layouts[main_layout.MainState.HOME].settings_callback)
 
 
 def test_sunnypilot_driving_hud_disables_experimental_status_ring(monkeypatch):
@@ -215,6 +396,7 @@ def test_signature_is_anchored_to_bottom_left(monkeypatch):
   renderer.font_demi = object()
   renderer.font_medium = object()
   renderer.vehicle_logo = object()
+  renderer._lc_display_state = "disabled"
 
   fake_ui_state = SimpleNamespace(
     road_name_toggle=True,
@@ -260,6 +442,7 @@ def test_signature_draws_without_road_name_and_clears_lhd_driver_icon(monkeypatc
   renderer.font_demi = object()
   renderer.font_medium = object()
   renderer.vehicle_logo = object()
+  renderer._lc_display_state = "disabled"
 
   fake_ui_state = SimpleNamespace(
     road_name_toggle=False,
@@ -294,6 +477,7 @@ def test_missing_road_name_shows_coordinate_free_map_health(monkeypatch):
   renderer.mapd_health = "tile_missing"
   renderer.font_demi = object()
   renderer.font_medium = object()
+  renderer._lc_display_state = "disabled"
 
   fake_ui_state = SimpleNamespace(
     road_name_toggle=True,
@@ -326,6 +510,7 @@ def test_vehicle_logo_is_hidden_during_alerts(monkeypatch):
   renderer.font_demi = object()
   renderer.font_medium = object()
   renderer.vehicle_logo = object()
+  renderer._lc_display_state = "disabled"
 
   fake_ui_state = SimpleNamespace(
     road_name_toggle=True,
