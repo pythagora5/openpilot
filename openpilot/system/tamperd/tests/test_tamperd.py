@@ -9,6 +9,37 @@ class RecordingParams:
     self.writes.append((key, value, block))
 
 
+class FakeCapture:
+  def __init__(self, calls):
+    self.calls = calls
+
+  def capture(self, _event):
+    self.calls.append("capture")
+    return tamperd.CaptureOutcome("event-1", "captured", ("road",), {}, "/tmp/event-1")
+
+
+class FakeNotifier:
+  def __init__(self, calls):
+    self.calls = calls
+
+  def notify_detection(self, _event):
+    self.calls.append("notification")
+    return tamperd.DeliveryOutcome(True, notification_sent=True)
+
+  def notify_photos(self, _capture, outcome):
+    self.calls.append("photos")
+    return tamperd.DeliveryOutcome(True, outcome.notification_sent, ("road",), outcome.errors)
+
+  def close(self):
+    pass
+
+
+class RaisingNotifier(FakeNotifier):
+  def notify_detection(self, _event):
+    self.calls.append("notification_failed")
+    raise OSError("network setup failed")
+
+
 def test_sensitivity_falls_back_to_medium():
   assert tamperd.normalize_sensitivity(None) == 1
   assert tamperd.normalize_sensitivity(-1) == 1
@@ -53,6 +84,37 @@ def test_record_event_merges_capture_outcome():
   assert value["eventId"] == "event-1"
   assert value["capturedCameras"] == ["road", "wide"]
   assert blocking
+
+
+def test_handle_event_attempts_notification_before_capture_then_photos():
+  params = RecordingParams()
+  calls = []
+  event = tamperd.TamperEvent(125, "impact", 3.5, 1.2)
+
+  capture, delivery = tamperd.handle_tamper_event(params, FakeCapture(calls), FakeNotifier(calls), event)
+
+  assert set(calls[:2]) == {"notification", "capture"}
+  assert calls[-1] == "photos"
+  assert capture.event_id == "event-1"
+  assert delivery.photos_sent == ("road",)
+  event_writes = [value for key, value, _blocking in params.writes if key == "TamperModeLastEvent"]
+  assert event_writes[0]["deliveryState"] == "partial"
+  assert event_writes[0]["eventId"] == "event-1"
+  assert event_writes[0]["storagePath"] == "/tmp/event-1"
+  assert event_writes[-1]["deliveryState"] == "sent"
+  assert event_writes[-1]["captureState"] == "captured"
+
+
+def test_notification_exception_cannot_prevent_capture():
+  params = RecordingParams()
+  calls = []
+  event = tamperd.TamperEvent(125, "impact", 3.5, 1.2)
+
+  capture, delivery = tamperd.handle_tamper_event(params, FakeCapture(calls), RaisingNotifier(calls), event)
+
+  assert "capture" in calls
+  assert capture.capture_state == "captured"
+  assert delivery.errors == {"notification": "internal_error"}
 
 
 def test_cooldown_status_is_written_once_across_jittering_samples(monkeypatch):

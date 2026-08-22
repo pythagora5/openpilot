@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
 
+from concurrent.futures import ThreadPoolExecutor
+
 import openpilot.cereal.messaging as messaging
 from openpilot.common.params import Params
 from openpilot.common.swaglog import cloudlog
-from openpilot.system.tamperd.capture import TamperCapture
+from openpilot.system.tamperd.capture import CaptureOutcome, TamperCapture
+from openpilot.system.tamperd.delivery import DeliveryOutcome, TamperNotifier
 from openpilot.system.tamperd.detector import SENSITIVITY_PROFILES
 from openpilot.system.tamperd.state import TamperEvent, TamperStateMachine
 from openpilot.system.tamperd.timebase import boottime_ns, monotonic_to_boottime_ns
@@ -50,6 +53,42 @@ def record_event(params: Params, event: TamperEvent, outcome: dict) -> None:
   params.put("TamperModeLastEvent", event_data, block=True)
 
 
+def safe_record_event(params: Params, event: TamperEvent, outcome: dict) -> None:
+  try:
+    record_event(params, event, outcome)
+  except Exception:
+    cloudlog.error("failed to persist tamper event state")
+
+
+def safe_notify_detection(notifier: TamperNotifier, event: TamperEvent) -> DeliveryOutcome:
+  try:
+    return notifier.notify_detection(event)
+  except Exception:
+    return DeliveryOutcome(True, errors={"notification": "internal_error"})
+
+
+def handle_tamper_event(params: Params, capture: TamperCapture, notifier: TamperNotifier,
+                        event: TamperEvent) -> tuple[CaptureOutcome, DeliveryOutcome]:
+  with ThreadPoolExecutor(max_workers=1, thread_name_prefix="tamper_ntfy") as executor:
+    notification = executor.submit(safe_notify_detection, notifier, event)
+    capture_outcome = capture.capture(event)
+    delivery = notification.result()
+  interim_outcome = capture_outcome.as_param()
+  interim_outcome.update(delivery.as_param())
+  safe_record_event(params, event, interim_outcome)
+  try:
+    delivery = notifier.notify_photos(capture_outcome, delivery)
+  except Exception:
+    errors = dict(delivery.errors or {})
+    errors["photos"] = "internal_error"
+    delivery = DeliveryOutcome(delivery.configured, delivery.notification_sent, delivery.photos_sent, errors)
+  expected_photos = capture_outcome.captured_cameras
+  final_outcome = capture_outcome.as_param()
+  final_outcome.update(delivery.as_param(expected_photos if capture_outcome.capture_state == "captured" else None))
+  safe_record_event(params, event, final_outcome)
+  return capture_outcome, delivery
+
+
 def process_sensor_sample(params: Params, machine: TamperStateMachine, sensor_timestamp_ns: int,
                           vector, previous_status: dict | None) -> tuple[dict, TamperEvent | None]:
   timestamp_ns = monotonic_to_boottime_ns(sensor_timestamp_ns)
@@ -60,6 +99,7 @@ def process_sensor_sample(params: Params, machine: TamperStateMachine, sensor_ti
 
 def main() -> None:
   params = Params()
+  notifier = None
   clear_capture_deadline(params)
   try:
     raw_sensitivity = params.get("TamperModeSensitivity", return_default=True)
@@ -69,6 +109,7 @@ def main() -> None:
 
     machine = TamperStateMachine(sensitivity=sensitivity)
     capture = TamperCapture(params)
+    notifier = TamperNotifier(params)
     last_status = publish_status(params, {"state": "starting"}, None)
     started_at_boot_ns = boottime_ns()
     last_valid_boot_ns: int | None = None
@@ -115,11 +156,14 @@ def main() -> None:
 
       last_status, event = process_sensor_sample(params, machine, sensor.timestamp, sensor.acceleration.v, last_status)
       if event is not None:
-        outcome = capture.capture(event)
-        record_event(params, event, outcome.as_param())
+        handle_tamper_event(params, capture, notifier, event)
         last_status = publish_status(params, machine.status(), {"state": "capturing"})
   finally:
-    clear_capture_deadline(params)
+    try:
+      if notifier is not None:
+        notifier.close()
+    finally:
+      clear_capture_deadline(params)
 
 
 if __name__ == "__main__":
