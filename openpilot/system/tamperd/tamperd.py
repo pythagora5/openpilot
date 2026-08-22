@@ -10,6 +10,7 @@ from openpilot.system.tamperd.delivery import DeliveryOutcome, TamperNotifier
 from openpilot.system.tamperd.detector import SENSITIVITY_PROFILES
 from openpilot.system.tamperd.state import TamperEvent, TamperStateMachine
 from openpilot.system.tamperd.timebase import boottime_ns, monotonic_to_boottime_ns
+from openpilot.selfdrive.selfdrived.alertmanager import set_offroad_alert
 
 
 SENSOR_UNAVAILABLE_TIMEOUT_NS = int(1e9)
@@ -67,8 +68,41 @@ def safe_notify_detection(notifier: TamperNotifier, event: TamperEvent) -> Deliv
     return DeliveryOutcome(True, errors={"notification": "internal_error"})
 
 
+def safe_set_tamper_alert(message: str) -> None:
+  try:
+    set_offroad_alert("Offroad_TamperDetected", True, extra_text=message.strip() or "Tampering detected.")
+  except Exception:
+    cloudlog.error("failed to persist tamper offroad alert")
+
+
+def format_tamper_alert(capture: CaptureOutcome, delivery: DeliveryOutcome) -> str:
+  expected_photos = capture.captured_cameras if capture.capture_state == "captured" else None
+  delivery_state = delivery.as_param(expected_photos)["deliveryState"]
+  capture_complete = (capture.capture_state == "captured" and not capture.capture_errors and
+                      {"road", "wide"} <= set(capture.captured_cameras))
+  if capture_complete and delivery_state == "sent":
+    return "Tampering detected, notification and photos sent."
+  if capture.capture_state == "cancelled_gate_closed":
+    return "Tampering detected, but capture stopped because the voltage safety gate closed."
+  if capture.capture_state != "captured" and delivery.notification_sent:
+    return "Tampering detected. Notification sent, but photos could not be captured."
+  if capture.capture_state == "captured" and not capture_complete and delivery.notification_sent:
+    return "Tampering detected. Notification sent, but road/wide camera capture was incomplete."
+  if capture.capture_state == "captured" and not capture_complete and delivery_state == "not_configured":
+    return "Tampering detected. Some camera evidence was saved locally, but capture was incomplete and ntfy is not configured."
+  if capture.capture_state == "captured" and delivery_state == "not_configured":
+    return "Tampering detected. Photos saved locally; ntfy notifications are not configured."
+  if capture.capture_state == "captured" and delivery.notification_sent:
+    return "Tampering detected. Notification sent, but one or more photos could not be delivered."
+  if capture.capture_state == "captured":
+    if not capture_complete:
+      return "Tampering detected. Camera capture and notification delivery were incomplete."
+    return "Tampering detected. Photos saved locally, but notification delivery failed."
+  return "Tampering detected, but notification and camera capture failed."
+
+
 def handle_tamper_event(params: Params, capture: TamperCapture, notifier: TamperNotifier,
-                        event: TamperEvent) -> tuple[CaptureOutcome, DeliveryOutcome]:
+                        event: TamperEvent, alert_callback=safe_set_tamper_alert) -> tuple[CaptureOutcome, DeliveryOutcome]:
   with ThreadPoolExecutor(max_workers=1, thread_name_prefix="tamper_ntfy") as executor:
     notification = executor.submit(safe_notify_detection, notifier, event)
     capture_outcome = capture.capture(event)
@@ -76,6 +110,8 @@ def handle_tamper_event(params: Params, capture: TamperCapture, notifier: Tamper
   interim_outcome = capture_outcome.as_param()
   interim_outcome.update(delivery.as_param())
   safe_record_event(params, event, interim_outcome)
+  if capture_outcome.capture_state == "captured":
+    alert_callback("Tampering detected. Photos captured; notification delivery in progress.")
   try:
     delivery = notifier.notify_photos(capture_outcome, delivery)
   except Exception:
@@ -86,6 +122,7 @@ def handle_tamper_event(params: Params, capture: TamperCapture, notifier: Tamper
   final_outcome = capture_outcome.as_param()
   final_outcome.update(delivery.as_param(expected_photos if capture_outcome.capture_state == "captured" else None))
   safe_record_event(params, event, final_outcome)
+  alert_callback(format_tamper_alert(capture_outcome, delivery))
   return capture_outcome, delivery
 
 

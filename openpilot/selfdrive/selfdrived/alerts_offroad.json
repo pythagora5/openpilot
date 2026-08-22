@@ -34,7 +34,7 @@
     "severity": 0
   },
   "Offroad_TamperDetected": {
-    "text": "Possible vehicle tampering detected. %1",
+    "text": "%1",
     "severity": 1
   },
   "Offroad_OSMUpdateRequired": {

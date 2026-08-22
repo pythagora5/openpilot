@@ -1,19 +1,37 @@
+import time
+
 from openpilot.cereal import log
 from openpilot.common.params import Params, UnknownKeyName
 from openpilot.system.ui.widgets import Widget
-from openpilot.system.ui.widgets.list_view import multiple_button_item, toggle_item
+from openpilot.system.ui.widgets.list_view import button_item, multiple_button_item, text_item, toggle_item
 from openpilot.system.ui.widgets.scroller_tici import Scroller
 from openpilot.system.ui.widgets.confirm_dialog import ConfirmDialog
+from openpilot.system.ui.widgets.keyboard import Keyboard
 from openpilot.system.ui.lib.application import gui_app
 from openpilot.system.ui.lib.multilang import tr, tr_noop
 from openpilot.system.ui.widgets import DialogResult
 from openpilot.selfdrive.ui.ui_state import ui_state
+from openpilot.system.tamperd.config import validate_ntfy_url
 
 if gui_app.sunnypilot_ui():
   from openpilot.system.ui.sunnypilot.widgets.list_view import toggle_item_sp as toggle_item
   from openpilot.system.ui.sunnypilot.widgets.list_view import multiple_button_item_sp as multiple_button_item
+  from openpilot.system.ui.sunnypilot.widgets.list_view import button_item_sp as button_item
 
 PERSONALITY_TO_INT = log.LongitudinalPersonality.schema.enumerants
+TAMPER_UI_REFRESH_INTERVAL_S = 1.
+TAMPER_STATUS_TEXT = {
+  "disabled": tr_noop("Disabled"),
+  "voltage": tr_noop("Waiting for safe voltage"),
+  "armed": tr_noop("Armed"),
+  "baselining": tr_noop("Calibrating"),
+  "capturing": tr_noop("Capturing photos"),
+  "cooldown": tr_noop("Cooldown"),
+  "sensor_unavailable": tr_noop("Sensor unavailable"),
+  "starting": tr_noop("Starting"),
+  "onroad": tr_noop("Unavailable while on-road"),
+  "unavailable": tr_noop("Monitor unavailable"),
+}
 
 # Description constants
 DESCRIPTIONS = {
@@ -35,7 +53,71 @@ DESCRIPTIONS = {
   'RecordFront': tr_noop("Upload data from the driver facing camera and help improve the driver monitoring algorithm."),
   "IsMetric": tr_noop("Display speed in km/h instead of mph."),
   "RecordAudio": tr_noop("Record and store microphone audio while driving. The audio will be included in the dashcam video in comma connect."),
+  "TamperModeEnabled": tr_noop(
+    "Monitor parked-vehicle movement using the device accelerometer. Monitoring runs only while off-road and vehicle voltage is safely above the cutoff."
+  ),
+  "TamperModeIncludeDriverCamera": tr_noop(
+    "Also attach a driver-facing photo to tamper notifications. Leave this off unless the additional cabin view is wanted."
+  ),
 }
+
+
+def ntfy_url_configured(params: Params) -> bool:
+  value = params.get("TamperModeNtfyUrl") or ""
+  if not isinstance(value, str):
+    return False
+  try:
+    validate_ntfy_url(value)
+    return True
+  except ValueError:
+    return False
+
+
+def tamper_status_text(params: Params, started: bool = False, process_running: bool | None = True) -> str:
+  if not params.get_bool("TamperModeEnabled"):
+    return TAMPER_STATUS_TEXT["disabled"]
+  if started:
+    return TAMPER_STATUS_TEXT["onroad"]
+  if not params.get_bool("TamperModeVoltageSafe"):
+    return TAMPER_STATUS_TEXT["voltage"]
+  if process_running is None:
+    return TAMPER_STATUS_TEXT["starting"]
+  if not process_running:
+    return TAMPER_STATUS_TEXT["unavailable"]
+  status = params.get("TamperModeStatus") or {}
+  state = status.get("state") if isinstance(status, dict) else None
+  if not isinstance(state, str):
+    state = None
+  return TAMPER_STATUS_TEXT.get(state, TAMPER_STATUS_TEXT["starting"])
+
+
+def normalize_tamper_sensitivity(value) -> int:
+  return value if value in (0, 1, 2) else 1
+
+
+def tamper_process_running() -> bool | None:
+  try:
+    if not ui_state.sm.alive["managerState"] or not ui_state.sm.valid["managerState"]:
+      return None
+    for process in ui_state.sm["managerState"].processes:
+      if process.name == "tamperd":
+        return True if process.running else (None if process.shouldBeRunning else False)
+  except (AttributeError, KeyError):
+    return None
+  return False
+
+
+def store_ntfy_url(params: Params, value: str) -> bool:
+  value = value.strip()
+  if not value:
+    params.remove("TamperModeNtfyUrl")
+    return True
+  try:
+    value = validate_ntfy_url(value)
+  except ValueError:
+    return False
+  params.put("TamperModeNtfyUrl", value, block=True)
+  return True
 
 
 class TogglesLayout(Widget):
@@ -43,6 +125,10 @@ class TogglesLayout(Widget):
     super().__init__()
     self._params = Params()
     self._is_release = False  # self._params.get_bool("IsReleaseBranch")
+    self._tamper_url_button_text = tr("SET")
+    self._tamper_status_label = tr(TAMPER_STATUS_TEXT["disabled"])
+    self._last_tamper_ui_refresh = 0.
+    self._refresh_tamper_ui(force=True)
 
     # param, title, desc, icon, needs_restart
     self._toggle_defs = {
@@ -94,6 +180,18 @@ class TogglesLayout(Widget):
         "metric.png",
         False,
       ),
+      "TamperModeEnabled": (
+        lambda: tr("Parked Tamper Monitoring"),
+        DESCRIPTIONS["TamperModeEnabled"],
+        "warning.png",
+        False,
+      ),
+      "TamperModeIncludeDriverCamera": (
+        lambda: tr("Include Driver Camera Photo"),
+        DESCRIPTIONS["TamperModeIncludeDriverCamera"],
+        "monitoring.png",
+        False,
+      ),
     }
 
     self._long_personality_setting = multiple_button_item(
@@ -139,12 +237,37 @@ class TogglesLayout(Widget):
       if param == "DisengageOnAccelerator":
         self._toggles["LongitudinalPersonality"] = self._long_personality_setting
 
+    self._tamper_url_setting = button_item(
+      lambda: tr("ntfy Topic URL"),
+      lambda: self._tamper_url_button_text,
+      lambda: tr("Enter the complete HTTPS ntfy topic URL. Treat the topic URL like a password: anyone who knows it may receive the photos."),
+      callback=self._show_tamper_url_dialog,
+    )
+    self._tamper_sensitivity_setting = multiple_button_item(
+      lambda: tr("Tamper Sensitivity"),
+      lambda: tr("Choose how much parked-vehicle movement is required before an alert."),
+      buttons=[lambda: tr("Low"), lambda: tr("Medium"), lambda: tr("High")],
+      button_width=250,
+      callback=lambda value: self._params.put("TamperModeSensitivity", value, block=True),
+      selected_index=normalize_tamper_sensitivity(self._params.get("TamperModeSensitivity", return_default=True)),
+      icon="warning.png",
+    )
+    self._tamper_status_setting = text_item(
+      lambda: tr("Tamper Monitoring Status"),
+      lambda: self._tamper_status_label,
+      lambda: tr("Shows whether monitoring is armed or waiting for the vehicle-voltage safety gate."),
+    )
+    self._toggles["TamperModeNtfyUrl"] = self._tamper_url_setting
+    self._toggles["TamperModeSensitivity"] = self._tamper_sensitivity_setting
+    self._toggles["TamperModeStatus"] = self._tamper_status_setting
+
     self._update_experimental_mode_icon()
     self._scroller = Scroller(list(self._toggles.values()), line_separator=True, spacing=0)
 
     ui_state.add_engaged_transition_callback(self._update_toggles)
 
   def _update_state(self):
+    self._refresh_tamper_ui()
     if ui_state.sm.updated["selfdriveState"]:
       personality = PERSONALITY_TO_INT[ui_state.sm["selfdriveState"].personality]
       if personality != ui_state.personality and ui_state.started:
@@ -203,6 +326,9 @@ class TogglesLayout(Widget):
     # refresh toggles from params to mirror external changes
     for param in self._toggle_defs:
       self._toggles[param].action_item.set_state(self._params.get_bool(param))
+    sensitivity = normalize_tamper_sensitivity(self._params.get("TamperModeSensitivity", return_default=True))
+    self._tamper_sensitivity_setting.action_item.set_selected_button(sensitivity)
+    self._refresh_tamper_ui(force=True)
 
     # these toggles need restart, block while engaged
     for toggle_def in self._toggle_defs:
@@ -247,3 +373,30 @@ class TogglesLayout(Widget):
 
   def _set_longitudinal_personality(self, button_index: int):
     self._params.put("LongitudinalPersonality", button_index, block=True)
+
+  def _show_tamper_url_dialog(self):
+    keyboard = Keyboard(max_text_size=255, min_text_size=0, password_mode=True, show_password_toggle=True)
+    keyboard.set_title(tr("ntfy Topic URL"), tr("Enter a complete HTTPS topic URL. Leave blank to disable notifications."))
+    keyboard.set_text(self._params.get("TamperModeNtfyUrl") or "")
+
+    def handle_result(result: DialogResult):
+      if result != DialogResult.CONFIRM:
+        return
+      if not store_ntfy_url(self._params, keyboard.text):
+        gui_app.push_widget(ConfirmDialog(
+          tr("Enter a valid HTTPS ntfy topic URL without credentials, query parameters, or fragments."),
+          tr("OK"), cancel_text="",
+        ))
+        return
+      self._refresh_tamper_ui(force=True)
+
+    keyboard.set_callback(handle_result)
+    gui_app.push_widget(keyboard)
+
+  def _refresh_tamper_ui(self, force: bool = False):
+    now = time.monotonic()
+    if not force and now - self._last_tamper_ui_refresh < TAMPER_UI_REFRESH_INTERVAL_S:
+      return
+    self._tamper_url_button_text = tr("EDIT") if ntfy_url_configured(self._params) else tr("SET")
+    self._tamper_status_label = tr(tamper_status_text(self._params, ui_state.started, tamper_process_running()))
+    self._last_tamper_ui_refresh = now
