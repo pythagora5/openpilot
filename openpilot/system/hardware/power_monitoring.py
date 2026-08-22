@@ -13,10 +13,63 @@ CAR_BATTERY_CAPACITY_uWh = 30e6
 CAR_CHARGING_RATE_W = 45
 
 VBATT_PAUSE_CHARGING = 11.8           # Lower limit on the LPF car battery voltage
+TAMPER_ARM_VOLTAGE_MV = 12.4e3
+TAMPER_DISARM_VOLTAGE_MV = 12.1e3
+TAMPER_ARM_DURATION_S = 60.
+TAMPER_MAX_SAMPLE_GAP_S = 2.
 MAX_TIME_OFFROAD_S = 30*3600
 MIN_ON_TIME_S = 3600
 DELAY_SHUTDOWN_TIME_S = 300 # Wait at least DELAY_SHUTDOWN_TIME_S seconds after offroad_time to shutdown.
 VOLTAGE_SHUTDOWN_MIN_OFFROAD_TIME_S = 60
+
+
+class TamperVoltageGate:
+  def __init__(self, arm_voltage_mV: float = TAMPER_ARM_VOLTAGE_MV,
+               disarm_voltage_mV: float = TAMPER_DISARM_VOLTAGE_MV,
+               arm_duration_s: float = TAMPER_ARM_DURATION_S,
+               max_sample_gap_s: float = TAMPER_MAX_SAMPLE_GAP_S):
+    if disarm_voltage_mV >= arm_voltage_mV:
+      raise ValueError("tamper disarm voltage must be below arm voltage")
+    if arm_duration_s < 0:
+      raise ValueError("tamper arm duration must be non-negative")
+    if max_sample_gap_s <= 0:
+      raise ValueError("tamper maximum sample gap must be positive")
+
+    self.arm_voltage_mV = arm_voltage_mV
+    self.disarm_voltage_mV = disarm_voltage_mV
+    self.arm_duration_s = arm_duration_s
+    self.max_sample_gap_s = max_sample_gap_s
+    self.arm_started_at: float | None = None
+    self.last_update_at: float | None = None
+    self.safe = False
+
+  def update(self, voltage_mV: float | None, ignition: bool | None, now: float | None = None) -> bool:
+    now = time.monotonic() if now is None else now
+
+    if self.last_update_at is not None:
+      sample_gap = now - self.last_update_at
+      if sample_gap < 0 or sample_gap > self.max_sample_gap_s:
+        self.arm_started_at = None
+        self.safe = False
+    self.last_update_at = now
+
+    if ignition is not False or voltage_mV is None or voltage_mV < self.disarm_voltage_mV:
+      self.arm_started_at = None
+      self.safe = False
+      return self.safe
+
+    if self.safe:
+      return self.safe
+
+    if voltage_mV < self.arm_voltage_mV:
+      self.arm_started_at = None
+      return self.safe
+
+    if self.arm_started_at is None:
+      self.arm_started_at = now
+
+    self.safe = (now - self.arm_started_at) >= self.arm_duration_s
+    return self.safe
 
 class PowerMonitoring:
   def __init__(self):
@@ -103,6 +156,9 @@ class PowerMonitoring:
 
   def get_car_battery_capacity(self) -> int:
     return int(self.car_battery_capacity_uWh)
+
+  def get_car_voltage(self) -> float:
+    return self.car_voltage_mV
 
   # Max Time Offroad
   def max_time_offroad_exceeded(self, offroad_time):

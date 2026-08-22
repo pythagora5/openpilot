@@ -1,7 +1,7 @@
 import pytest
 
 from openpilot.common.params import Params
-from openpilot.system.hardware.power_monitoring import PowerMonitoring, CAR_BATTERY_CAPACITY_uWh, \
+from openpilot.system.hardware.power_monitoring import PowerMonitoring, TamperVoltageGate, CAR_BATTERY_CAPACITY_uWh, \
   CAR_CHARGING_RATE_W, VBATT_PAUSE_CHARGING, DELAY_SHUTDOWN_TIME_S, MAX_TIME_OFFROAD_S
 
 # Create fake time
@@ -25,6 +25,74 @@ def pm_patch(mocker, name, value, constant=False):
 @pytest.fixture(autouse=True)
 def mock_time(mocker):
   mocker.patch("time.monotonic", mock_time_monotonic)
+
+
+class TestTamperVoltageGate:
+  def test_requires_continuous_safe_voltage(self):
+    gate = TamperVoltageGate(arm_duration_s=60.)
+
+    for now in range(60):
+      assert not gate.update(12400., False, now=float(now))
+    assert gate.update(12400., False, now=60.)
+
+  def test_nominal_initial_voltage_does_not_arm(self):
+    gate = TamperVoltageGate(arm_duration_s=60.)
+
+    assert not gate.update(12000., False, now=0.)
+    assert not gate.update(12000., False, now=600.)
+
+  def test_invalid_voltage_resets_arming_timer(self):
+    gate = TamperVoltageGate(arm_duration_s=60.)
+
+    assert not gate.update(12500., False, now=0.)
+    assert not gate.update(None, False, now=1.)
+    for now in range(2, 62):
+      assert not gate.update(12500., False, now=float(now))
+    assert gate.update(12500., False, now=62.)
+
+  def test_voltage_hysteresis(self):
+    gate = TamperVoltageGate(arm_duration_s=1.)
+
+    assert not gate.update(12500., False, now=0.)
+    assert gate.update(12500., False, now=1.)
+    assert gate.update(12200., False, now=2.)
+    assert not gate.update(12099., False, now=3.)
+
+  def test_ignition_disarms_and_resets_timer(self):
+    gate = TamperVoltageGate(arm_duration_s=60.)
+
+    assert not gate.update(12500., False, now=0.)
+    assert not gate.update(14000., True, now=1.)
+    for now in range(2, 62):
+      assert not gate.update(12500., False, now=float(now))
+    assert gate.update(12500., False, now=62.)
+
+  def test_unknown_ignition_is_unsafe(self):
+    gate = TamperVoltageGate(arm_duration_s=1.)
+
+    assert not gate.update(12500., False, now=0.)
+    assert not gate.update(12500., None, now=1.)
+    assert not gate.update(12500., False, now=2.)
+    assert gate.update(12500., False, now=3.)
+
+  def test_sample_gap_resets_safe_state(self):
+    gate = TamperVoltageGate(arm_duration_s=1., max_sample_gap_s=2.)
+
+    assert not gate.update(12500., False, now=0.)
+    assert gate.update(12500., False, now=1.)
+    assert not gate.update(12500., False, now=4.)
+    assert gate.update(12500., False, now=5.)
+
+  @pytest.mark.parametrize("arm, disarm, duration, max_gap", [
+    (12000., 12000., 60., 2.),
+    (12000., 12100., 60., 2.),
+    (12400., 12100., -1., 2.),
+    (12400., 12100., 60., 0.),
+  ])
+  def test_invalid_configuration(self, arm, disarm, duration, max_gap):
+    with pytest.raises(ValueError):
+      TamperVoltageGate(arm_voltage_mV=arm, disarm_voltage_mV=disarm,
+                        arm_duration_s=duration, max_sample_gap_s=max_gap)
 
 
 class TestPowerMonitoring:
