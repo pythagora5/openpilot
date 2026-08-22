@@ -48,7 +48,44 @@ def test_incomplete_event_is_removed_at_startup(tmp_path):
   incomplete = tmp_path / ".event-1.partial"
   incomplete.mkdir()
   (incomplete / "road.jpg").write_bytes(b"partial")
+  old = incomplete.stat().st_mtime - 301
+  os.utime(incomplete, (old, old))
 
   EventStorage(tmp_path)
 
   assert not incomplete.exists()
+
+
+def test_recent_incomplete_event_is_not_removed(tmp_path):
+  incomplete = tmp_path / ".event-1.active"
+  incomplete.mkdir()
+
+  EventStorage(tmp_path)
+
+  assert incomplete.exists()
+
+
+def test_recent_incomplete_event_counts_toward_quota(tmp_path):
+  incomplete = tmp_path / ".event-1.active"
+  incomplete.mkdir()
+  (incomplete / "road.jpg").write_bytes(b"1234")
+  storage = EventStorage(tmp_path, max_bytes=5)
+
+  with pytest.raises(OSError, match="quota unavailable"):
+    storage.save_event("event-2", {}, {})
+
+  assert incomplete.exists()
+
+
+def test_unprunable_bytes_do_not_evict_existing_evidence(tmp_path):
+  storage = EventStorage(tmp_path, max_bytes=8)
+  existing = storage.save_event("event-1", {}, {})
+  incomplete = tmp_path / ".event-2.active"
+  incomplete.mkdir()
+  (incomplete / "road.jpg").write_bytes(b"1234567")
+
+  with pytest.raises(OSError, match="quota unavailable"):
+    storage.save_event("event-3", {}, {})
+
+  assert existing.exists()
+  assert (existing / "event.json").read_bytes() == b"{}"

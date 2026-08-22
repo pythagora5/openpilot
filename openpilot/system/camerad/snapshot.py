@@ -17,7 +17,8 @@ VISION_STREAMS = {
 }
 
 SNAPSHOT_CONNECT_TIMEOUT_S = 2.
-SNAPSHOT_WARMUP_GRACE_S = 2.
+SNAPSHOT_CAPTURE_RESERVE_S = 3.
+SNAPSHOT_STARTUP_GRACE_S = 6.
 SNAPSHOT_POLL_MS = 100
 
 
@@ -51,7 +52,7 @@ def extract_image(buf):
   return yuv_to_rgb(y, u, v)
 
 
-def get_snapshots_bounded(frames: Iterable[str], timeout_s: float = 10., warmup_s: float = 4.,
+def get_snapshots_bounded(frames: Iterable[str], timeout_s: float = 15., warmup_s: float = 4.,
                           cancelled: Callable[[], bool] | None = None) -> tuple[dict[str, np.ndarray], dict[str, str]]:
   """Capture RGB images within one total deadline, returning partial results and per-camera errors."""
   if timeout_s <= 0 or warmup_s < 0:
@@ -75,7 +76,8 @@ def get_snapshots_bounded(frames: Iterable[str], timeout_s: float = 10., warmup_
   # wait 4 sec from camerad startup for focus and exposure
   warmup_frames = int(warmup_s / DT_MDL)
   pending_warmup = set(sockets)
-  warmup_deadline = min(deadline, started_at + warmup_s + SNAPSHOT_WARMUP_GRACE_S)
+  capture_reserve_s = min(SNAPSHOT_CAPTURE_RESERVE_S, timeout_s * .25)
+  warmup_deadline = min(deadline - capture_reserve_s, started_at + warmup_s + SNAPSHOT_STARTUP_GRACE_S)
   while pending_warmup and time.monotonic() < warmup_deadline:
     if is_cancelled():
       return {}, dict.fromkeys(sockets, "cancelled")
@@ -122,7 +124,19 @@ def get_snapshots_bounded(frames: Iterable[str], timeout_s: float = 10., warmup_
   return images, errors
 
 
-def get_snapshots(frame="roadCameraState", front_frame="driverCameraState"):
+def get_snapshots(frame="roadCameraState", front_frame="driverCameraState", timeout_s: float = 20.):
+  if timeout_s <= 0:
+    raise ValueError("snapshot timeout must be positive")
   sockets = [s for s in (frame, front_frame) if s is not None]
-  images, _ = get_snapshots_bounded(sockets)
-  return images.get(frame) if frame is not None else None, images.get(front_frame) if front_frame is not None else None
+  deadline = time.monotonic() + timeout_s
+  collected: dict[str, np.ndarray] = {}
+  errors: dict[str, str] = {}
+  while time.monotonic() < deadline:
+    remaining_s = deadline - time.monotonic()
+    images, errors = get_snapshots_bounded(sockets, timeout_s=min(15., remaining_s))
+    collected.update(images)
+    if all(socket in collected for socket in sockets):
+      return (collected.get(frame) if frame is not None else None,
+              collected.get(front_frame) if front_frame is not None else None)
+    time.sleep(min(.25, max(0., deadline - time.monotonic())))
+  raise TimeoutError(f"camera snapshot timed out: {errors}")
