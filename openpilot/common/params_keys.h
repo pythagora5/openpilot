@@ -246,6 +246,7 @@ inline static std::unordered_map<std::string, ParamKeyAttributes> keys = {
     // Lyle Pilot tamper mode
     {"Offroad_TamperDetected", {CLEAR_ON_MANAGER_START | DONT_LOG, JSON}},
     {"TamperModeCaptureDeadlineMono", {CLEAR_ON_MANAGER_START | DONT_LOG, INT, "0"}},
+    {"TamperModeCaptureRequestedMono", {CLEAR_ON_MANAGER_START | DONT_LOG, INT, "0"}},
     {"TamperModeEnabled", {PERSISTENT, BOOL, "0"}},
     {"TamperModeIncludeDriverCamera", {PERSISTENT | BACKUP, BOOL, "0"}},
     {"TamperModeLastEvent", {PERSISTENT | DONT_LOG, JSON}},

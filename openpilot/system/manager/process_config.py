@@ -7,6 +7,7 @@ from openpilot.cereal import custom
 from openpilot.common.params import Params
 from openpilot.common.hardware import PC, TICI
 from openpilot.system.manager.process import PythonProcess, NativeProcess, DaemonProcess
+from openpilot.system.tamperd.timebase import boottime_ns
 from openpilot.common.hardware.hw import Paths
 
 from openpilot.sunnypilot.mapd.mapd_manager import MAPD_PATH
@@ -15,6 +16,7 @@ from openpilot.sunnypilot.models.helpers import get_active_model_runner
 from openpilot.sunnypilot.sunnylink.utils import sunnylink_need_register, sunnylink_ready, use_sunnylink_uploader
 
 WEBCAM = os.getenv("USE_WEBCAM") is not None
+TAMPER_CAPTURE_MAX_DURATION_NS = int(30e9)
 
 def driverview(started: bool, params: Params, CP: car.CarParams) -> bool:
   return started or params.get_bool("IsDriverViewEnabled")
@@ -67,6 +69,26 @@ def only_offroad(started: bool, params: Params, CP: car.CarParams) -> bool:
 
 def livestream(started: bool, params: Params, CP: car.CarParams) -> bool:
   return params.get_bool("IsLiveStreaming")
+
+def tamper_monitoring(started: bool, params: Params, CP: car.CarParams) -> bool:
+  return not started and params.get_bool("TamperModeEnabled") and params.get_bool("TamperModeVoltageSafe")
+
+def tamper_capture(started: bool, params: Params, CP: car.CarParams) -> bool:
+  if not tamper_monitoring(started, params, CP):
+    return False
+
+  try:
+    requested = params.get("TamperModeCaptureRequestedMono") or 0
+    deadline = params.get("TamperModeCaptureDeadlineMono") or 0
+    requested = int(requested)
+    deadline = int(deadline)
+  except (TypeError, ValueError):
+    return False
+
+  now = boottime_ns()
+  duration_ns = deadline - requested
+  age_ns = now - requested
+  return 0 <= age_ns < duration_ns <= TAMPER_CAPTURE_MAX_DURATION_NS
 
 def use_github_runner(started, params, CP: car.CarParams) -> bool:
   return not PC and params.get_bool("EnableGithubRunner") and (
@@ -121,7 +143,7 @@ procs = [
   NativeProcess("stream_encoderd", "openpilot/system/loggerd", ["./encoderd", "--stream"], or_(and_(livestream, not_(iscar)), notcar)),
   PythonProcess("logmessaged", "openpilot.system.logmessaged", always_run),
 
-  NativeProcess("camerad", "openpilot/system/camerad", ["./camerad"], or_(driverview, livestream), enabled=not WEBCAM),
+  NativeProcess("camerad", "openpilot/system/camerad", ["./camerad"], or_(or_(driverview, livestream), tamper_capture), enabled=not WEBCAM),
   PythonProcess("webcamerad", "openpilot.system.camerad.webcam.camerad", driverview, enabled=WEBCAM),
   PythonProcess("proclogd", "openpilot.system.proclogd", only_onroad, enabled=platform.system() != "Darwin"),
   PythonProcess("journald", "openpilot.system.journald", only_onroad, platform.system() != "Darwin"),
@@ -131,7 +153,8 @@ procs = [
   PythonProcess("modeld", "openpilot.selfdrive.modeld.modeld", and_(only_onroad, is_stock_model)),
   PythonProcess("dmonitoringmodeld", "openpilot.selfdrive.modeld.dmonitoringmodeld", driverview, enabled=(WEBCAM or not PC)),
 
-  PythonProcess("sensord", "openpilot.system.sensord.sensord", only_onroad, enabled=not PC),
+  PythonProcess("sensord", "openpilot.system.sensord.sensord", or_(only_onroad, tamper_monitoring), enabled=not PC),
+  PythonProcess("tamperd", "openpilot.system.tamperd.tamperd", tamper_monitoring, enabled=not PC),
   PythonProcess("ui", "openpilot.selfdrive.ui.ui", always_run, restart_if_crash=True),
   PythonProcess("soundd", "openpilot.selfdrive.ui.soundd", driverview),
   PythonProcess("locationd", "openpilot.selfdrive.locationd.locationd", only_onroad),

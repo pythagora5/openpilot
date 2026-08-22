@@ -126,6 +126,7 @@ class TestParams:
     assert self.params.get("TamperModeSensitivity", return_default=True) == 1
     assert self.params.get("TamperModeIncludeDriverCamera", return_default=True) is False
     assert self.params.get("TamperModeCaptureDeadlineMono", return_default=True) == 0
+    assert self.params.get("TamperModeCaptureRequestedMono", return_default=True) == 0
     assert self.params.get("TamperModeTestNotification", return_default=True) is False
     assert self.params.get("TamperModeVoltageSafe", return_default=True) is False
 
@@ -150,6 +151,7 @@ class TestParams:
     assert b"TamperModeStatus" in manager_start_keys
     assert b"TamperModeVoltageSafe" in manager_start_keys
     assert b"TamperModeCaptureDeadlineMono" in manager_start_keys
+    assert b"TamperModeCaptureRequestedMono" in manager_start_keys
     assert b"Offroad_TamperDetected" in manager_start_keys
 
   def test_params_get_type(self):
