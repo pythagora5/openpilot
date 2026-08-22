@@ -37,6 +37,24 @@ def test_event_timestamp_is_already_boottime():
   assert event_data["deliveryState"] == "not_started"
 
 
+def test_record_event_merges_capture_outcome():
+  params = RecordingParams()
+  event = tamperd.TamperEvent(125, "impact", 3.5, 1.2)
+
+  tamperd.record_event(params, event, {
+    "eventId": "event-1",
+    "captureState": "captured",
+    "capturedCameras": ["road", "wide"],
+  })
+
+  key, value, blocking = params.writes[0]
+  assert key == "TamperModeLastEvent"
+  assert value["reason"] == "impact"
+  assert value["eventId"] == "event-1"
+  assert value["capturedCameras"] == ["road", "wide"]
+  assert blocking
+
+
 def test_cooldown_status_is_written_once_across_jittering_samples(monkeypatch):
   params = RecordingParams()
   machine = tamperd.TamperStateMachine(cooldown_s=120.)

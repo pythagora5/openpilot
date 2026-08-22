@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
 
+import time
+from collections.abc import Callable, Iterable
+
 import numpy as np
 
 import openpilot.cereal.messaging as messaging
@@ -12,6 +15,10 @@ VISION_STREAMS = {
   "driverCameraState": VisionStreamType.VISION_STREAM_DRIVER,
   "wideRoadCameraState": VisionStreamType.VISION_STREAM_WIDE_ROAD,
 }
+
+SNAPSHOT_CONNECT_TIMEOUT_S = 2.
+SNAPSHOT_WARMUP_GRACE_S = 2.
+SNAPSHOT_POLL_MS = 100
 
 
 def yuv_to_rgb(y, u, v):
@@ -44,24 +51,78 @@ def extract_image(buf):
   return yuv_to_rgb(y, u, v)
 
 
-def get_snapshots(frame="roadCameraState", front_frame="driverCameraState"):
-  sockets = [s for s in (frame, front_frame) if s is not None]
+def get_snapshots_bounded(frames: Iterable[str], timeout_s: float = 10., warmup_s: float = 4.,
+                          cancelled: Callable[[], bool] | None = None) -> tuple[dict[str, np.ndarray], dict[str, str]]:
+  """Capture RGB images within one total deadline, returning partial results and per-camera errors."""
+  if timeout_s <= 0 or warmup_s < 0:
+    raise ValueError("snapshot timeout must be positive and warmup non-negative")
+
+  sockets = list(dict.fromkeys(frames))
+  if not sockets:
+    return {}, {}
+  unknown = set(sockets) - VISION_STREAMS.keys()
+  if unknown:
+    raise ValueError(f"unknown camera state(s): {sorted(unknown)}")
+
+  is_cancelled = cancelled or (lambda: False)
+  started_at = time.monotonic()
+  deadline = started_at + timeout_s
   sm = messaging.SubMaster(sockets)
   vipc_clients = {s: VisionIpcClient("camerad", VISION_STREAMS[s], True) for s in sockets}
+  images: dict[str, np.ndarray] = {}
+  errors: dict[str, str] = {}
 
   # wait 4 sec from camerad startup for focus and exposure
-  while sm[sockets[0]].frameId < int(4. / DT_MDL):
-    sm.update()
+  warmup_frames = int(warmup_s / DT_MDL)
+  pending_warmup = set(sockets)
+  warmup_deadline = min(deadline, started_at + warmup_s + SNAPSHOT_WARMUP_GRACE_S)
+  while pending_warmup and time.monotonic() < warmup_deadline:
+    if is_cancelled():
+      return {}, dict.fromkeys(sockets, "cancelled")
+    for name in list(pending_warmup):
+      if sm[name].frameId >= warmup_frames:
+        pending_warmup.remove(name)
+    if not pending_warmup:
+      break
+    remaining_ms = int((warmup_deadline - time.monotonic()) * 1000)
+    if remaining_ms <= 0:
+      break
+    sm.update(min(SNAPSHOT_POLL_MS, remaining_ms))
 
-  for client in vipc_clients.values():
-    client.connect(True)
+  for name in pending_warmup:
+    errors[name] = "warmup_timeout"
 
-  # grab images
-  rear, front = None, None
-  if frame is not None:
-    c = vipc_clients[frame]
-    rear = extract_image(c.recv())
-  if front_frame is not None:
-    c = vipc_clients[front_frame]
-    front = extract_image(c.recv())
-  return rear, front
+  pending = set(sockets) - pending_warmup
+  connect_deadline = min(deadline, time.monotonic() + SNAPSHOT_CONNECT_TIMEOUT_S)
+  while pending and time.monotonic() < connect_deadline and not is_cancelled():
+    for name in list(pending):
+      if vipc_clients[name].connect(False):
+        pending.remove(name)
+    if pending:
+      time.sleep(min(.05, max(0., connect_deadline - time.monotonic())))
+
+  for name in pending:
+    errors[name] = "connect_timeout" if not is_cancelled() else "cancelled"
+
+  for name in sockets:
+    if name in errors:
+      continue
+    while time.monotonic() < deadline and not is_cancelled():
+      remaining_ms = max(1, int((deadline - time.monotonic()) * 1000))
+      buf = vipc_clients[name].recv(timeout_ms=min(SNAPSHOT_POLL_MS, remaining_ms))
+      if buf is not None:
+        try:
+          images[name] = extract_image(buf)
+        except (TypeError, ValueError) as exc:
+          errors[name] = f"invalid_frame:{type(exc).__name__}"
+        break
+    if name not in images and name not in errors:
+      errors[name] = "cancelled" if is_cancelled() else "frame_timeout"
+
+  return images, errors
+
+
+def get_snapshots(frame="roadCameraState", front_frame="driverCameraState"):
+  sockets = [s for s in (frame, front_frame) if s is not None]
+  images, _ = get_snapshots_bounded(sockets)
+  return images.get(frame) if frame is not None else None, images.get(front_frame) if front_frame is not None else None
