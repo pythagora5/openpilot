@@ -32,6 +32,7 @@ AT_INIT = [
   "AT&C1",      # DCD pin follows carrier state (V.250 default)
   "AT+CREG=2",  # registration URCs include location info
   "AT+CGREG=2", # GPRS registration URCs include location info
+  "AT+CEREG=2", # EPS (LTE) registration URCs include location info
 ]
 CREG = {0: "not_registered", 1: "home", 2: "searching", 3: "denied", 4: "unknown", 5: "roaming"}
 # 3GPP TS 27.007 +COPS <AcT> -> network type
@@ -78,20 +79,45 @@ STATE_WAIT = 1.0  # seconds to wait after each state handler returns
 class PPPSession:
   """Owns pppd lifecycle, fail tracking, and PPP routing."""
   MAX_FAILS = 3
+  CONNECT_TIMEOUT_S = 45
 
   def __init__(self):
     self._proc: subprocess.Popen | None = None
     self._fails = 0
     self._peer = ""
+    self._routes_ready = False
+    self._dns_ready = False
+    self._started_at = 0.0
+    self._stale_procs: list[subprocess.Popen] = []
+    self._terminated = False
+
+  def _reap_stale_procs(self):
+    self._stale_procs = [proc for proc in self._stale_procs if proc.poll() is None]
 
   def start(self):
+    self._reap_stale_procs()
     self._proc = subprocess.Popen(PPPD_CMD, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    self._terminated = False
     self._peer = ""
+    self._routes_ready = False
+    self._dns_ready = False
+    self._started_at = time.monotonic()
     logging.info(f"PPP dialing CID {DIAL_CID}")
 
   def kill(self):
+    self._reap_stale_procs()
     subprocess.run(["sudo", "killall", "-9", "pppd"], capture_output=True)
+    if self._proc is not None and self._proc.poll() is None:
+      try:
+        self._proc.wait(timeout=2)
+      except subprocess.TimeoutExpired:
+        logging.warning("timed out waiting for pppd to exit")
+        self._stale_procs.append(self._proc)
+    self._proc = None
+    self._terminated = True
     self._peer = ""
+    self._routes_ready = False
+    self._dns_ready = False
 
   @staticmethod
   def reset_data_port():
@@ -105,7 +131,11 @@ class PPPSession:
       logging.warning(f"data port reset failed: {e}")
 
   def has_exited(self) -> bool:
-    return self._proc is not None and self._proc.poll() is not None
+    return self._terminated or (self._proc is not None and self._proc.poll() is not None)
+
+  def connect_timed_out(self) -> bool:
+    return (self._proc is not None and self._proc.poll() is None and not self.ready and
+            time.monotonic() - self._started_at >= self.CONNECT_TIMEOUT_S)
 
   def reset_fail_counter(self):
     self._fails = 0
@@ -119,10 +149,20 @@ class PPPSession:
   def fails(self) -> int:
     return self._fails
 
+  @property
+  def ready(self) -> bool:
+    return self._routes_ready and self._dns_ready
+
+  @property
+  def dns_ready(self) -> bool:
+    return self._dns_ready
+
   def maybe_install_routes(self, ip: str, peer: str) -> bool:
     """Install routes if peer changed; kill the session on failure so the state machine reconnects."""
-    if not peer or peer == self._peer:
+    if not peer:
       return False
+    if peer == self._peer and self._routes_ready:
+      return True
     try:
       IPv4Address(ip)
       IPv4Address(peer)
@@ -145,12 +185,16 @@ class PPPSession:
         return False
     logging.info(f"route set up for {ip} via {peer}")
     self._peer = peer
+    self._routes_ready = True
+    self._dns_ready = False
     return True
 
   def maybe_install_dns(self, dns_servers: list[str]) -> bool:
     """Register DNS servers with systemd-resolved; kill the session on failure to force a retry."""
     if not dns_servers:
       return False
+    if self._dns_ready:
+      return True
     for cmd in (["sudo", "resolvectl", "dns", "ppp0", *dns_servers],
                 ["sudo", "resolvectl", "default-route", "ppp0", "yes"]):
       r = subprocess.run(cmd, capture_output=True, text=True)
@@ -159,6 +203,8 @@ class PPPSession:
         self.kill()
         return False
     logging.info(f"resolvectl: ppp0 DNS = {dns_servers}")
+    self._dns_ready = True
+    self.reset_fail_counter()
     return True
 
   @staticmethod
@@ -191,7 +237,12 @@ class Modem:
   @staticmethod
   def _parse_reg(v: str) -> str:
     try:
-      return CREG.get(int(v.split(",")[1].strip('"')), "unknown")
+      fields = [field.strip().strip('"') for field in v.split(",")]
+      # Query responses are <n>,<stat>,... while URCs are <stat>[,<location>,...].
+      # Both leading query fields are single-digit enums; location fields are not.
+      enum_values = ("0", "1", "2", "3", "4", "5")
+      stat = fields[1] if len(fields) > 1 and fields[0] in enum_values and fields[1] in enum_values else fields[0]
+      return CREG.get(int(stat), "unknown")
     except (ValueError, IndexError):
       return "unknown"
 
@@ -333,24 +384,27 @@ class Modem:
       logging.info(f"roaming changed: {self._roaming_allowed} -> {new_roaming}")
       self._roaming_allowed = new_roaming
 
-    v = self._atv("AT+CREG?", "+CREG:")
-    if not v:
-      return self._searching_idle()
+    # LTE data registration is reported by CEREG. CGREG is the packet-domain
+    # fallback for older networks; CREG alone only proves circuit registration.
+    cereg = self._parse_reg(self._atv("AT+CEREG?", "+CEREG:") or "")
+    cgreg = "unknown"
+    if cereg not in ("home", "roaming"):
+      cgreg = self._parse_reg(self._atv("AT+CGREG?", "+CGREG:") or "")
 
-    reg = self._parse_reg(v)
-    greg = self._parse_reg(self._atv("AT+CGREG?", "+CGREG:") or "")
-    logging.debug(f"creg={reg} cgreg={greg} roaming_allowed={self._roaming_allowed}")
+    packet_reg = cereg if cereg in ("home", "roaming") else cgreg
+    reported_reg = packet_reg if packet_reg != "unknown" else cereg
+    logging.debug(f"cereg={cereg} cgreg={cgreg} roaming_allowed={self._roaming_allowed}")
 
-    if reg == "roaming" and not self._roaming_allowed:
-      self._publish_state(registration=reg)
+    if packet_reg == "roaming" and not self._roaming_allowed:
+      self._publish_state(registration=packet_reg)
       return State.SEARCHING
 
-    if reg in ("home", "roaming") and greg in ("home", "roaming"):
-      self._publish_state(registration=reg)
+    if packet_reg in ("home", "roaming"):
+      self._publish_state(registration=packet_reg)
       return State.CONNECTING
 
-    if reg != self.S.get("registration"):
-      self._publish_state(registration=reg)
+    if reported_reg != self.S.get("registration"):
+      self._publish_state(registration=reported_reg)
     return self._searching_idle()
 
   def _searching_idle(self):
@@ -369,6 +423,8 @@ class Modem:
   def _handle_pppd_exit(self):
     if self._sim_change or not os.path.exists(AT_PORT):
       return State.DISCONNECTING
+    if self.S["connected"]:
+      self._publish_state(connected=False, ip_address="")
     give_up = self._ppp.record_fail()
     if give_up:
       logging.warning(f"PPP fail {self._ppp.fails}/{self._ppp.MAX_FAILS}, reconnecting")
@@ -407,6 +463,10 @@ class Modem:
       return State.DISCONNECTING
 
     self._poll()
+    if self._ppp.connect_timed_out():
+      logging.warning(f"PPP did not become usable within {self._ppp.CONNECT_TIMEOUT_S}s, retrying")
+      self._ppp.kill()
+      return self._handle_pppd_exit()
     return State.CONNECTED
 
   def _do_disconnecting(self):
@@ -484,10 +544,18 @@ class Modem:
             peer = parts[parts.index("peer") + 1].split("/")[0]
           break
       if ip:
-        if self._ppp.maybe_install_routes(ip, peer):
-          self._ppp.maybe_install_dns(self._read_cellular_dns())
-        return {"ip_address": ip, "connected": True}
-      if self.S["connected"]:
+        routes_ready = self._ppp.maybe_install_routes(ip, peer)
+        dns_ready = self._ppp.dns_ready
+        if routes_ready and not dns_ready:
+          dns_ready = self._ppp.maybe_install_dns(self._read_cellular_dns())
+        if routes_ready and dns_ready:
+          return {"ip_address": ip, "connected": True}
+        if self.S["connected"]:
+          return {"connected": False, "ip_address": ""}
+        return {}
+      elif self._ppp.ready:
+        logging.warning("PPP interface lost its IPv4 address, retrying")
+        self._ppp.kill()
         return {"connected": False, "ip_address": ""}
     except Exception:
       pass
@@ -495,10 +563,8 @@ class Modem:
 
   def _read_cellular_dns(self) -> list[str]:
     v = self._atv(f"AT+CGCONTRDP={DIAL_CID}", "+CGCONTRDP:")
-    if not v:
-      return []
     # +CGCONTRDP: <cid>,<bearer_id>,<apn>,<local_addr>,<gw_addr>,<dns_prim>,<dns_sec>,...
-    fields = [f.strip().strip('"') for f in v.split(",")]
+    fields = [f.strip().strip('"') for f in v.split(",")] if v else []
     dns_servers = []
     for d in fields[5:7]:
       try:
