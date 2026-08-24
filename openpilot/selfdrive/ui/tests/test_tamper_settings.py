@@ -1,5 +1,6 @@
 from openpilot.selfdrive.ui.layouts.settings.toggles import (
-  normalize_tamper_sensitivity, ntfy_url_configured, store_ntfy_url, tamper_status_text,
+  normalize_tamper_sensitivity, ntfy_test_enabled, ntfy_test_result_text, ntfy_test_result_visible,
+  ntfy_url_configured, store_ntfy_url, tamper_status_text,
 )
 
 
@@ -73,3 +74,25 @@ def test_tamper_sensitivity_clamps_invalid_values():
   assert normalize_tamper_sensitivity(2) == 2
   assert normalize_tamper_sensitivity(None) == 1
   assert normalize_tamper_sensitivity(99) == 1
+
+
+def test_ntfy_test_results_are_actionable_and_do_not_expose_topic():
+  assert "Confirm it arrived" in ntfy_test_result_text(None)
+  assert "HTTPS topic URL" in ntfy_test_result_text("invalid_url")
+  assert "internet connection" in ntfy_test_result_text("request_failed")
+  assert "rejected" in ntfy_test_result_text("http_403")
+  assert "try again" in ntfy_test_result_text("internal_error")
+  assert "topic-name" not in ntfy_test_result_text("https://ntfy.example/topic-name")
+
+
+def test_ntfy_test_enablement_is_offroad_and_independent_of_voltage_gate():
+  assert ntfy_test_enabled(url_configured=True, offroad=True, in_progress=False)
+  assert not ntfy_test_enabled(url_configured=False, offroad=True, in_progress=False)
+  assert not ntfy_test_enabled(url_configured=True, offroad=False, in_progress=False)
+  assert not ntfy_test_enabled(url_configured=True, offroad=True, in_progress=True)
+
+
+def test_ntfy_test_results_only_surface_for_the_current_offroad_panel():
+  assert ntfy_test_result_visible(result_generation=2, current_generation=2, offroad=True)
+  assert not ntfy_test_result_visible(result_generation=1, current_generation=2, offroad=True)
+  assert not ntfy_test_result_visible(result_generation=2, current_generation=2, offroad=False)

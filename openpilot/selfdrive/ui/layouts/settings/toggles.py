@@ -1,3 +1,5 @@
+import queue
+import threading
 import time
 
 from openpilot.cereal import log
@@ -31,6 +33,13 @@ TAMPER_STATUS_TEXT = {
   "starting": tr_noop("Starting"),
   "onroad": tr_noop("Unavailable while on-road"),
   "unavailable": tr_noop("Monitor unavailable"),
+}
+NTFY_TEST_RESULT_TEXT = {
+  "success": tr_noop("Test notification sent. Confirm it arrived in your ntfy app."),
+  "invalid_url": tr_noop("The saved ntfy topic URL is invalid. Enter a complete HTTPS topic URL."),
+  "request_failed": tr_noop("Could not reach ntfy. Check the device internet connection and try again."),
+  "server_rejected": tr_noop("ntfy rejected the test message. Check the topic or server configuration and try again."),
+  "internal_error": tr_noop("The test notification could not be sent. Please try again."),
 }
 
 # Description constants
@@ -120,6 +129,26 @@ def store_ntfy_url(params: Params, value: str) -> bool:
   return True
 
 
+def ntfy_test_result_text(error: str | None) -> str:
+  if error is None:
+    return NTFY_TEST_RESULT_TEXT["success"]
+  if error == "invalid_url":
+    return NTFY_TEST_RESULT_TEXT["invalid_url"]
+  if error == "request_failed":
+    return NTFY_TEST_RESULT_TEXT["request_failed"]
+  if error.startswith("http_"):
+    return NTFY_TEST_RESULT_TEXT["server_rejected"]
+  return NTFY_TEST_RESULT_TEXT["internal_error"]
+
+
+def ntfy_test_enabled(url_configured: bool, offroad: bool, in_progress: bool) -> bool:
+  return url_configured and offroad and not in_progress
+
+
+def ntfy_test_result_visible(result_generation: int, current_generation: int, offroad: bool) -> bool:
+  return result_generation == current_generation and offroad
+
+
 class TogglesLayout(Widget):
   def __init__(self):
     super().__init__()
@@ -128,6 +157,10 @@ class TogglesLayout(Widget):
     self._tamper_url_button_text = tr("SET")
     self._tamper_status_label = tr(TAMPER_STATUS_TEXT["disabled"])
     self._last_tamper_ui_refresh = 0.
+    self._tamper_url_configured = False
+    self._ntfy_test_in_progress = False
+    self._ntfy_test_generation = 0
+    self._ntfy_test_results: queue.SimpleQueue[tuple[int, str | None]] = queue.SimpleQueue()
     self._refresh_tamper_ui(force=True)
 
     # param, title, desc, icon, needs_restart
@@ -243,6 +276,13 @@ class TogglesLayout(Widget):
       lambda: tr("Enter the complete HTTPS ntfy topic URL. Treat the topic URL like a password: anyone who knows it may receive the photos."),
       callback=self._show_tamper_url_dialog,
     )
+    self._tamper_test_setting = button_item(
+      lambda: tr("Test ntfy Notification"),
+      lambda: tr("SENDING") if self._ntfy_test_in_progress else tr("SEND"),
+      lambda: tr("Send a text-only test message to confirm this device can reach the configured ntfy topic. This does not capture photos."),
+      callback=self._send_ntfy_test,
+      enabled=lambda: ntfy_test_enabled(self._tamper_url_configured, ui_state.is_offroad(), self._ntfy_test_in_progress),
+    )
     self._tamper_sensitivity_setting = multiple_button_item(
       lambda: tr("Tamper Sensitivity"),
       lambda: tr("Choose how much parked-vehicle movement is required before an alert."),
@@ -258,6 +298,7 @@ class TogglesLayout(Widget):
       lambda: tr("Shows whether monitoring is armed or waiting for the vehicle-voltage safety gate."),
     )
     self._toggles["TamperModeNtfyUrl"] = self._tamper_url_setting
+    self._toggles["TamperModeNtfyTest"] = self._tamper_test_setting
     self._toggles["TamperModeSensitivity"] = self._tamper_sensitivity_setting
     self._toggles["TamperModeStatus"] = self._tamper_status_setting
 
@@ -267,6 +308,7 @@ class TogglesLayout(Widget):
     ui_state.add_engaged_transition_callback(self._update_toggles)
 
   def _update_state(self):
+    self._handle_ntfy_test_result()
     self._refresh_tamper_ui()
     if ui_state.sm.updated["selfdriveState"]:
       personality = PERSONALITY_TO_INT[ui_state.sm["selfdriveState"].personality]
@@ -278,6 +320,11 @@ class TogglesLayout(Widget):
     super().show_event()
     self._scroller.show_event()
     self._update_toggles()
+
+  def hide_event(self):
+    self._ntfy_test_generation += 1
+    super().hide_event()
+    self._scroller.hide_event()
 
   def _update_toggles(self):
     ui_state.update_params()
@@ -393,10 +440,52 @@ class TogglesLayout(Widget):
     keyboard.set_callback(handle_result)
     gui_app.push_widget(keyboard)
 
+  def _send_ntfy_test(self):
+    if self._ntfy_test_in_progress or not ui_state.is_offroad():
+      return
+    url = self._params.get("TamperModeNtfyUrl") or ""
+    if not isinstance(url, str):
+      url = ""
+    try:
+      url = validate_ntfy_url(url)
+    except ValueError:
+      gui_app.push_widget(ConfirmDialog(tr(ntfy_test_result_text("invalid_url")), tr("OK"), cancel_text=""))
+      return
+
+    self._ntfy_test_in_progress = True
+    generation = self._ntfy_test_generation
+
+    def worker():
+      try:
+        from openpilot.system.tamperd.delivery import send_test_notification
+        error = send_test_notification(url)
+      except Exception:
+        error = "internal_error"
+      self._ntfy_test_results.put((generation, error))
+
+    try:
+      threading.Thread(target=worker, daemon=True, name="ntfy-test").start()
+    except Exception:
+      self._ntfy_test_in_progress = False
+      gui_app.push_widget(ConfirmDialog(tr(ntfy_test_result_text("internal_error")), tr("OK"), cancel_text=""))
+
+  def _handle_ntfy_test_result(self):
+    while True:
+      try:
+        generation, error = self._ntfy_test_results.get_nowait()
+      except queue.Empty:
+        return
+      self._ntfy_test_in_progress = False
+      if not ntfy_test_result_visible(generation, self._ntfy_test_generation, ui_state.is_offroad()):
+        continue
+      gui_app.push_widget(ConfirmDialog(tr(ntfy_test_result_text(error)), tr("OK"), cancel_text=""))
+      return
+
   def _refresh_tamper_ui(self, force: bool = False):
     now = time.monotonic()
     if not force and now - self._last_tamper_ui_refresh < TAMPER_UI_REFRESH_INTERVAL_S:
       return
-    self._tamper_url_button_text = tr("EDIT") if ntfy_url_configured(self._params) else tr("SET")
+    self._tamper_url_configured = ntfy_url_configured(self._params)
+    self._tamper_url_button_text = tr("EDIT") if self._tamper_url_configured else tr("SET")
     self._tamper_status_label = tr(tamper_status_text(self._params, ui_state.started, tamper_process_running()))
     self._last_tamper_ui_refresh = now

@@ -58,6 +58,19 @@ class NtfyPublisher:
       TEXT_TIMEOUT,
     )
 
+  def publish_test(self) -> str | None:
+    return self._request(
+      "POST",
+      b"Your Lyle Pilot ntfy configuration is working.",
+      {
+        "Content-Type": "text/plain; charset=utf-8",
+        "X-Title": "Lyle Pilot notification test",
+        "X-Priority": "default",
+        "X-Tags": "white_check_mark,car",
+      },
+      TEXT_TIMEOUT,
+    )
+
   def publish_photo(self, camera: str, image: bytes) -> str | None:
     label = CAMERA_LABELS[camera]
     return self._request(
@@ -73,6 +86,23 @@ class NtfyPublisher:
       },
       ATTACHMENT_TIMEOUT,
     )
+
+
+def send_test_notification(url: str, publisher_factory: Callable[[str], NtfyPublisher] = NtfyPublisher) -> str | None:
+  publisher = None
+  try:
+    publisher = publisher_factory(url)
+    return publisher.publish_test()
+  except ValueError:
+    return "invalid_url"
+  except Exception:
+    return "internal_error"
+  finally:
+    if publisher is not None:
+      try:
+        publisher.close()
+      except Exception:
+        pass
 
 
 @dataclass(frozen=True)

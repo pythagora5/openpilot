@@ -3,7 +3,7 @@ from pathlib import Path
 import requests
 
 from openpilot.system.tamperd.capture import CaptureOutcome
-from openpilot.system.tamperd.delivery import NtfyPublisher, TamperNotifier, validate_ntfy_url
+from openpilot.system.tamperd.delivery import NtfyPublisher, TamperNotifier, send_test_notification, validate_ntfy_url
 from openpilot.system.tamperd.state import TamperEvent
 
 
@@ -54,6 +54,10 @@ class FakePublisher:
     self.calls.append("notification")
     return self.detection_error
 
+  def publish_test(self):
+    self.calls.append("test")
+    return self.detection_error
+
   def publish_photo(self, camera, image):
     self.calls.append((camera, image))
     return self.photo_errors.get(camera)
@@ -78,11 +82,12 @@ def test_validate_ntfy_url_requires_secret_https_topic_path():
 
 
 def test_publisher_uses_bounded_non_redirecting_requests():
-  responses = [FakeResponse(), FakeResponse()]
+  responses = [FakeResponse(), FakeResponse(), FakeResponse()]
   session = FakeSession(responses)
   publisher = NtfyPublisher("https://ntfy.example/secret-topic", session)
 
   assert publisher.publish_detection() is None
+  assert publisher.publish_test() is None
   assert publisher.publish_photo("road", b"jpeg") is None
 
   text_method, text_url, text_kwargs = session.requests[0]
@@ -92,12 +97,47 @@ def test_publisher_uses_bounded_non_redirecting_requests():
   assert text_kwargs["timeout"] == (3.05, 5.)
   assert text_kwargs["headers"]["Content-Type"] == "text/plain; charset=utf-8"
   assert b"Camera capture has started" in text_kwargs["data"]
-  photo_method, _, photo_kwargs = session.requests[1]
+  test_method, _, test_kwargs = session.requests[1]
+  assert test_method == "POST"
+  assert test_kwargs["timeout"] == (3.05, 5.)
+  assert test_kwargs["headers"]["X-Title"] == "Lyle Pilot notification test"
+  assert test_kwargs["data"] == b"Your Lyle Pilot ntfy configuration is working."
+  photo_method, _, photo_kwargs = session.requests[2]
   assert photo_method == "PUT"
   assert photo_kwargs["headers"]["X-Filename"] == "tamper-road.jpg"
   assert photo_kwargs["data"] == b"jpeg"
   assert session.trust_env is False
   assert all(response.closed for response in responses)
+
+
+def test_send_test_notification_reports_result_and_closes_publisher():
+  calls = []
+  publisher = FakePublisher(calls=calls)
+
+  assert send_test_notification("https://ntfy.example/topic", lambda _url: publisher) is None
+  assert calls == ["test"]
+  assert publisher.closed
+
+  assert send_test_notification("invalid", lambda _url: NtfyPublisher("invalid")) == "invalid_url"
+
+
+def test_send_test_notification_preserves_coarse_errors_and_handles_exceptions():
+  request_failed = FakePublisher(detection_error="request_failed")
+  rejected = FakePublisher(detection_error="http_403")
+
+  assert send_test_notification("https://ntfy.example/topic", lambda _url: request_failed) == "request_failed"
+  assert send_test_notification("https://ntfy.example/topic", lambda _url: rejected) == "http_403"
+  assert request_failed.closed
+  assert rejected.closed
+
+  class RaisingPublisher(FakePublisher):
+    def publish_test(self):
+      raise RuntimeError("https://ntfy.example/secret-topic")
+
+  raising = RaisingPublisher()
+  assert send_test_notification("https://ntfy.example/secret-topic", lambda _url: raising) == "internal_error"
+  assert raising.closed
+  assert send_test_notification("https://ntfy.example/secret-topic", lambda _url: (_ for _ in ()).throw(OSError("secret"))) == "internal_error"
 
 
 def test_publisher_returns_coarse_errors_without_url_or_body():
