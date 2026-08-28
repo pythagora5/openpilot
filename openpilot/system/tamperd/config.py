@@ -1,6 +1,10 @@
 import unicodedata
 from urllib.parse import urlsplit
 
+TAMPER_ARM_VOLTAGE_MV = 12.4e3
+TAMPER_DISARM_VOLTAGE_MV = 12.1e3
+TAMPER_ARM_DURATION_S = 60.
+
 
 def validate_ntfy_url(value: str) -> str:
   value = value.strip()

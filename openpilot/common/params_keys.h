@@ -255,6 +255,7 @@ inline static std::unordered_map<std::string, ParamKeyAttributes> keys = {
     {"TamperModeStatus", {CLEAR_ON_MANAGER_START | DONT_LOG, JSON}},
     {"TamperModeTestNotification", {CLEAR_ON_MANAGER_START | DONT_LOG, BOOL, "0"}},
     {"TamperModeVoltageSafe", {CLEAR_ON_MANAGER_START | DONT_LOG, BOOL, "0"}},
+    {"TamperModeVoltageStatus", {CLEAR_ON_MANAGER_START | DONT_LOG, JSON}},
 
     // mapd
     {"MapAdvisorySpeedLimit", {CLEAR_ON_ONROAD_TRANSITION, FLOAT}},

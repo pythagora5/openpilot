@@ -133,6 +133,7 @@ class TestParams:
     assert self.params.get("TamperModeNtfyUrl", return_default=True) is None
     assert self.params.get("TamperModeLastEvent", return_default=True) is None
     assert self.params.get("TamperModeStatus", return_default=True) is None
+    assert self.params.get("TamperModeVoltageStatus", return_default=True) is None
 
     backup_keys = self.params.all_keys(ParamKeyFlag.BACKUP)
     dont_log_keys = self.params.all_keys(ParamKeyFlag.DONT_LOG)
@@ -146,10 +147,12 @@ class TestParams:
     assert b"TamperModeNtfyUrl" in dont_log_keys
     assert b"TamperModeLastEvent" in dont_log_keys
     assert b"TamperModeStatus" in dont_log_keys
+    assert b"TamperModeVoltageStatus" in dont_log_keys
     assert b"Offroad_TamperDetected" in dont_log_keys
     assert b"TamperModeEnabled" not in manager_start_keys
     assert b"TamperModeStatus" in manager_start_keys
     assert b"TamperModeVoltageSafe" in manager_start_keys
+    assert b"TamperModeVoltageStatus" in manager_start_keys
     assert b"TamperModeCaptureDeadlineMono" in manager_start_keys
     assert b"TamperModeCaptureRequestedMono" in manager_start_keys
     assert b"Offroad_TamperDetected" in manager_start_keys

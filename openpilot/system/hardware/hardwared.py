@@ -21,7 +21,7 @@ from openpilot.common.linux import LinuxSystemStats
 from openpilot.system.loggerd.config import get_available_percent
 from openpilot.common.swaglog import cloudlog
 from openpilot.sunnypilot.system.statsd import statlog
-from openpilot.system.hardware.power_monitoring import PowerMonitoring, TamperVoltageGate
+from openpilot.system.hardware.power_monitoring import PowerMonitoring, TamperVoltageGate, TamperVoltageStatusRateLimiter
 from openpilot.system.hardware.fan_controller import FanController
 from openpilot.common.version import terms_version, training_version, get_build_metadata, terms_version_sp
 
@@ -184,6 +184,7 @@ def hardware_thread(end_event, hw_queue) -> None:
   params.put_bool("TamperModeVoltageSafe", False, block=True)
   power_monitor = PowerMonitoring()
   tamper_voltage_gate = TamperVoltageGate()
+  tamper_voltage_status_limiter = TamperVoltageStatusRateLimiter()
   tamper_voltage_safe_prev: bool | None = None
 
   uptime_offroad: float = params.get("UptimeOffroad", return_default=True)
@@ -383,13 +384,15 @@ def hardware_thread(end_event, hw_queue) -> None:
     valid_voltage = voltage is not None and sm.alive["peripheralState"] and sm.valid["peripheralState"]
     valid_ignition = (sm.alive["pandaStates"] and sm.valid["pandaStates"] and
                       any(ps.pandaType != log.PandaState.PandaType.unknown for ps in pandaStates))
-    tamper_voltage_safe = tamper_voltage_gate.update(
-      min(voltage, power_monitor.get_car_voltage()) if valid_voltage else None,
-      onroad_conditions["ignition"] if valid_ignition else None,
-    )
+    effective_voltage = min(voltage, power_monitor.get_car_voltage()) if valid_voltage else None
+    effective_ignition = onroad_conditions["ignition"] if valid_ignition else None
+    tamper_voltage_safe = tamper_voltage_gate.update(effective_voltage, effective_ignition)
     if tamper_voltage_safe != tamper_voltage_safe_prev:
       params.put_bool("TamperModeVoltageSafe", tamper_voltage_safe, block=True)
       tamper_voltage_safe_prev = tamper_voltage_safe
+    tamper_voltage_status = tamper_voltage_gate.status()
+    if tamper_voltage_status_limiter.should_publish(tamper_voltage_status, tamper_voltage_gate.last_update_at or 0.):
+      params.put("TamperModeVoltageStatus", tamper_voltage_status, block=False)
 
     msg.deviceState.offroadPowerUsageUwh = power_monitor.get_power_used()
     msg.deviceState.carBatteryCapacityUwh = max(0, power_monitor.get_car_battery_capacity())

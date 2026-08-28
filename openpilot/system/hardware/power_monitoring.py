@@ -1,10 +1,12 @@
-import time
+import math
 import threading
+import time
 
 from openpilot.common.params import Params
 from openpilot.common.hardware import HARDWARE
 from openpilot.common.swaglog import cloudlog
 from openpilot.sunnypilot.system.statsd import statlog
+from openpilot.system.tamperd.config import TAMPER_ARM_DURATION_S, TAMPER_ARM_VOLTAGE_MV, TAMPER_DISARM_VOLTAGE_MV
 
 CAR_VOLTAGE_LOW_PASS_K = 0.011 # LPF gain for 45s tau (dt/tau / (dt/tau + 1))
 
@@ -13,10 +15,9 @@ CAR_BATTERY_CAPACITY_uWh = 30e6
 CAR_CHARGING_RATE_W = 45
 
 VBATT_PAUSE_CHARGING = 11.8           # Lower limit on the LPF car battery voltage
-TAMPER_ARM_VOLTAGE_MV = 12.4e3
-TAMPER_DISARM_VOLTAGE_MV = 12.1e3
-TAMPER_ARM_DURATION_S = 60.
 TAMPER_MAX_SAMPLE_GAP_S = 2.
+TAMPER_STATUS_ARMING_INTERVAL_S = 5.
+TAMPER_STATUS_IDLE_INTERVAL_S = 30.
 MAX_TIME_OFFROAD_S = 30*3600
 MIN_ON_TIME_S = 3600
 DELAY_SHUTDOWN_TIME_S = 300 # Wait at least DELAY_SHUTDOWN_TIME_S seconds after offroad_time to shutdown.
@@ -41,21 +42,28 @@ class TamperVoltageGate:
     self.max_sample_gap_s = max_sample_gap_s
     self.arm_started_at: float | None = None
     self.last_update_at: float | None = None
+    self.last_voltage_mV: float | None = None
+    self.last_ignition: bool | None = None
+    self.last_reset_reason: str | None = None
     self.safe = False
 
   def update(self, voltage_mV: float | None, ignition: bool | None, now: float | None = None) -> bool:
     now = time.monotonic() if now is None else now
+    self.last_voltage_mV = voltage_mV
+    self.last_ignition = ignition
 
     if self.last_update_at is not None:
       sample_gap = now - self.last_update_at
       if sample_gap < 0 or sample_gap > self.max_sample_gap_s:
         self.arm_started_at = None
         self.safe = False
+        self.last_reset_reason = "sample_gap"
     self.last_update_at = now
 
     if ignition is not False or voltage_mV is None or voltage_mV < self.disarm_voltage_mV:
       self.arm_started_at = None
       self.safe = False
+      self.last_reset_reason = None
       return self.safe
 
     if self.safe:
@@ -63,13 +71,74 @@ class TamperVoltageGate:
 
     if voltage_mV < self.arm_voltage_mV:
       self.arm_started_at = None
+      self.last_reset_reason = None
       return self.safe
 
     if self.arm_started_at is None:
       self.arm_started_at = now
 
     self.safe = (now - self.arm_started_at) >= self.arm_duration_s
+    if self.safe:
+      self.last_reset_reason = None
     return self.safe
+
+  def status(self) -> dict:
+    status = {
+      "state": "unavailable",
+      "armVoltageMv": int(self.arm_voltage_mV),
+      "disarmVoltageMv": int(self.disarm_voltage_mV),
+    }
+    if self.last_voltage_mV is not None:
+      # Floor to 0.1 V so the low-write diagnostic never overstates voltage.
+      status["voltageMv"] = max(0, int(self.last_voltage_mV) // 100 * 100)
+    if self.last_update_at is not None:
+      status["updatedAtMonoS"] = int(self.last_update_at)
+
+    if self.last_ignition is None or self.last_voltage_mV is None:
+      return status
+    if self.last_ignition:
+      status["state"] = "ignition_on"
+    elif self.safe:
+      status["state"] = "safe"
+    elif self.last_voltage_mV < self.disarm_voltage_mV:
+      status["state"] = "below_disarm"
+    elif self.last_voltage_mV < self.arm_voltage_mV:
+      status["state"] = "below_threshold"
+    elif self.arm_started_at is not None and self.last_update_at is not None:
+      remaining_s = max(0., self.arm_duration_s - (self.last_update_at - self.arm_started_at))
+      status["state"] = "arming"
+      status["remainingS"] = int(math.ceil(remaining_s / 5.) * 5)
+      if self.last_reset_reason is not None:
+        status["resetReason"] = self.last_reset_reason
+    return status
+
+
+class TamperVoltageStatusRateLimiter:
+  def __init__(self, arming_interval_s: float = TAMPER_STATUS_ARMING_INTERVAL_S,
+               idle_interval_s: float = TAMPER_STATUS_IDLE_INTERVAL_S):
+    self.arming_interval_s = arming_interval_s
+    self.idle_interval_s = idle_interval_s
+    self.last_status: dict | None = None
+    self.last_publish_at: float | None = None
+
+  def should_publish(self, status: dict, now: float) -> bool:
+    if self.last_status is None or self.last_publish_at is None:
+      should_publish = True
+    elif status == self.last_status:
+      should_publish = False
+    else:
+      current_state = status.get("state")
+      previous_state = self.last_status.get("state")
+      state_changed = current_state != previous_state
+      safe_transition = (current_state == "safe") != (previous_state == "safe")
+      interval_s = (self.arming_interval_s if state_changed or "arming" in (current_state, previous_state)
+                    else self.idle_interval_s)
+      should_publish = safe_transition or now - self.last_publish_at >= interval_s
+
+    if should_publish:
+      self.last_status = status
+      self.last_publish_at = now
+    return should_publish
 
 class PowerMonitoring:
   def __init__(self):

@@ -13,7 +13,7 @@ from openpilot.system.ui.lib.application import gui_app
 from openpilot.system.ui.lib.multilang import tr, tr_noop
 from openpilot.system.ui.widgets import DialogResult
 from openpilot.selfdrive.ui.ui_state import ui_state
-from openpilot.system.tamperd.config import validate_ntfy_url
+from openpilot.system.tamperd.config import TAMPER_ARM_DURATION_S, TAMPER_ARM_VOLTAGE_MV, TAMPER_DISARM_VOLTAGE_MV, validate_ntfy_url
 
 if gui_app.sunnypilot_ui():
   from openpilot.system.ui.sunnypilot.widgets.list_view import toggle_item_sp as toggle_item
@@ -22,6 +22,8 @@ if gui_app.sunnypilot_ui():
 
 PERSONALITY_TO_INT = log.LongitudinalPersonality.schema.enumerants
 TAMPER_UI_REFRESH_INTERVAL_S = 1.
+TAMPER_VOLTAGE_ARMING_STALE_S = 10.
+TAMPER_VOLTAGE_IDLE_STALE_S = 40.
 TAMPER_STATUS_TEXT = {
   "disabled": tr_noop("Disabled"),
   "voltage": tr_noop("Waiting for safe voltage"),
@@ -33,6 +35,21 @@ TAMPER_STATUS_TEXT = {
   "starting": tr_noop("Starting"),
   "onroad": tr_noop("Unavailable while on-road"),
   "unavailable": tr_noop("Monitor unavailable"),
+  "voltage_arming": tr_noop("Voltage gate arming"),
+  "voltage_rearming": tr_noop("Rearming after signal gap"),
+  "voltage_unavailable": tr_noop("Voltage data unavailable"),
+}
+TAMPER_VOLTAGE_TEXT = {
+  "arming": tr_noop("{voltage:.1f} V / {remaining:d} s"),
+  "below_disarm": tr_noop("{voltage:.1f} V < {threshold:.1f} V cutoff"),
+  "below_threshold": tr_noop("{voltage:.1f} V < {threshold:.1f} V"),
+  "ignition_on": tr_noop("Ignition on"),
+  "safe": tr_noop("{voltage:.1f} V / OK"),
+  "stale": tr_noop("Stale data"),
+  "timing_unavailable": tr_noop("Timing unavailable"),
+  "unavailable": tr_noop("Unavailable"),
+  "voltage": tr_noop("{voltage:.1f} V"),
+  "waiting": tr_noop("Waiting for data"),
 }
 NTFY_TEST_RESULT_TEXT = {
   "success": tr_noop("Test notification sent. Confirm it arrived in your ntfy app."),
@@ -82,12 +99,35 @@ def ntfy_url_configured(params: Params) -> bool:
     return False
 
 
-def tamper_status_text(params: Params, started: bool = False, process_running: bool | None = True) -> str:
+def tamper_voltage_status_is_stale(status: dict, now_mono: float | None = None) -> bool:
+  updated_at = status.get("updatedAtMonoS")
+  if updated_at is None:
+    return False
+  if isinstance(updated_at, bool) or not isinstance(updated_at, (int, float)):
+    return True
+  now_mono = time.monotonic() if now_mono is None else now_mono
+  age_s = now_mono - float(updated_at)
+  max_age_s = TAMPER_VOLTAGE_ARMING_STALE_S if status.get("state") == "arming" else TAMPER_VOLTAGE_IDLE_STALE_S
+  return age_s < 0. or age_s > max_age_s
+
+
+def tamper_status_text(params: Params, started: bool = False, process_running: bool | None = True,
+                       now_mono: float | None = None) -> str:
   if not params.get_bool("TamperModeEnabled"):
     return TAMPER_STATUS_TEXT["disabled"]
   if started:
     return TAMPER_STATUS_TEXT["onroad"]
   if not params.get_bool("TamperModeVoltageSafe"):
+    voltage_status = params.get("TamperModeVoltageStatus") or {}
+    voltage_state = voltage_status.get("state") if isinstance(voltage_status, dict) else None
+    if isinstance(voltage_status, dict) and tamper_voltage_status_is_stale(voltage_status, now_mono):
+      return TAMPER_STATUS_TEXT["voltage_unavailable"]
+    if voltage_state == "arming":
+      if voltage_status.get("resetReason") == "sample_gap":
+        return TAMPER_STATUS_TEXT["voltage_rearming"]
+      return TAMPER_STATUS_TEXT["voltage_arming"]
+    if voltage_state == "unavailable":
+      return TAMPER_STATUS_TEXT["voltage_unavailable"]
     return TAMPER_STATUS_TEXT["voltage"]
   if process_running is None:
     return TAMPER_STATUS_TEXT["starting"]
@@ -98,6 +138,53 @@ def tamper_status_text(params: Params, started: bool = False, process_running: b
   if not isinstance(state, str):
     state = None
   return TAMPER_STATUS_TEXT.get(state, TAMPER_STATUS_TEXT["starting"])
+
+
+def tamper_voltage_text(params: Params, now_mono: float | None = None) -> str:
+  status = params.get("TamperModeVoltageStatus") or {}
+  if not isinstance(status, dict):
+    return tr(TAMPER_VOLTAGE_TEXT["waiting"])
+  if tamper_voltage_status_is_stale(status, now_mono):
+    return tr(TAMPER_VOLTAGE_TEXT["stale"])
+  state = status.get("state")
+  if state == "ignition_on":
+    return tr(TAMPER_VOLTAGE_TEXT["ignition_on"])
+  if state == "unavailable":
+    return tr(TAMPER_VOLTAGE_TEXT["unavailable"])
+
+  voltage_mv = status.get("voltageMv")
+  arm_voltage_mv = status.get("armVoltageMv")
+  disarm_voltage_mv = status.get("disarmVoltageMv")
+  if isinstance(voltage_mv, bool) or not isinstance(voltage_mv, (int, float)):
+    return tr(TAMPER_VOLTAGE_TEXT["waiting"])
+  voltage = float(voltage_mv) / 1000.
+  if state == "below_disarm" and isinstance(disarm_voltage_mv, (int, float)) and not isinstance(disarm_voltage_mv, bool):
+    return tr(TAMPER_VOLTAGE_TEXT["below_disarm"]).format(
+      voltage=voltage, threshold=float(disarm_voltage_mv) / 1000.,
+    )
+  if state == "below_threshold" and isinstance(arm_voltage_mv, (int, float)) and not isinstance(arm_voltage_mv, bool):
+    return tr(TAMPER_VOLTAGE_TEXT["below_threshold"]).format(
+      voltage=voltage, threshold=float(arm_voltage_mv) / 1000.,
+    )
+  if state == "arming":
+    remaining_s = status.get("remainingS")
+    if isinstance(remaining_s, int) and not isinstance(remaining_s, bool) and remaining_s >= 0:
+      return tr(TAMPER_VOLTAGE_TEXT["arming"]).format(voltage=voltage, remaining=remaining_s)
+    return tr(TAMPER_VOLTAGE_TEXT["timing_unavailable"])
+  if state == "safe":
+    return tr(TAMPER_VOLTAGE_TEXT["safe"]).format(voltage=voltage)
+  return tr(TAMPER_VOLTAGE_TEXT["voltage"]).format(voltage=voltage)
+
+
+def tamper_voltage_description() -> str:
+  return tr(
+    "Shows the lower of the instantaneous and smoothed voltage readings used by the safety gate. " +
+    "Monitoring requires at least {arm_voltage:.1f} V continuously for {arm_duration:d} seconds and disarms below {disarm_voltage:.1f} V."
+  ).format(
+    arm_voltage=TAMPER_ARM_VOLTAGE_MV / 1000.,
+    arm_duration=int(TAMPER_ARM_DURATION_S),
+    disarm_voltage=TAMPER_DISARM_VOLTAGE_MV / 1000.,
+  )
 
 
 def normalize_tamper_sensitivity(value) -> int:
@@ -156,6 +243,7 @@ class TogglesLayout(Widget):
     self._is_release = False  # self._params.get_bool("IsReleaseBranch")
     self._tamper_url_button_text = tr("SET")
     self._tamper_status_label = tr(TAMPER_STATUS_TEXT["disabled"])
+    self._tamper_voltage_label = tr(TAMPER_VOLTAGE_TEXT["waiting"])
     self._last_tamper_ui_refresh = 0.
     self._tamper_url_configured = False
     self._ntfy_test_in_progress = False
@@ -297,10 +385,16 @@ class TogglesLayout(Widget):
       lambda: self._tamper_status_label,
       lambda: tr("Shows whether monitoring is armed or waiting for the vehicle-voltage safety gate."),
     )
+    self._tamper_voltage_setting = text_item(
+      lambda: tr("Tamper Voltage Safety"),
+      lambda: self._tamper_voltage_label,
+      tamper_voltage_description,
+    )
     self._toggles["TamperModeNtfyUrl"] = self._tamper_url_setting
     self._toggles["TamperModeNtfyTest"] = self._tamper_test_setting
     self._toggles["TamperModeSensitivity"] = self._tamper_sensitivity_setting
     self._toggles["TamperModeStatus"] = self._tamper_status_setting
+    self._toggles["TamperModeVoltageStatus"] = self._tamper_voltage_setting
 
     self._update_experimental_mode_icon()
     self._scroller = Scroller(list(self._toggles.values()), line_separator=True, spacing=0)
@@ -487,5 +581,8 @@ class TogglesLayout(Widget):
       return
     self._tamper_url_configured = ntfy_url_configured(self._params)
     self._tamper_url_button_text = tr("EDIT") if self._tamper_url_configured else tr("SET")
-    self._tamper_status_label = tr(tamper_status_text(self._params, ui_state.started, tamper_process_running()))
+    self._tamper_status_label = tr(tamper_status_text(
+      self._params, ui_state.started, tamper_process_running(), now_mono=now,
+    ))
+    self._tamper_voltage_label = tamper_voltage_text(self._params, now_mono=now)
     self._last_tamper_ui_refresh = now
