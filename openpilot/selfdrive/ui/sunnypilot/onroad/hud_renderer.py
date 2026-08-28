@@ -4,6 +4,7 @@ Copyright (c) 2021-, Haibin Wen, sunnypilot, and a number of other contributors.
 This file is part of sunnypilot and is licensed under the MIT License.
 See the LICENSE.md file in the root directory for more details.
 """
+
 import pyray as rl
 
 from openpilot.common.constants import CV
@@ -11,18 +12,17 @@ from openpilot.selfdrive.ui.mici.onroad.torque_bar import TorqueBar
 from openpilot.selfdrive.ui.sunnypilot.onroad.developer_ui import DeveloperUiRenderer, DeveloperUiState, get_bottom_dev_ui_offset
 from openpilot.selfdrive.ui.sunnypilot.onroad.road_name import RoadNameRenderer
 from openpilot.selfdrive.ui.sunnypilot.onroad.rocket_fuel import RocketFuel
-from openpilot.selfdrive.ui.sunnypilot.onroad.speed_limit import SpeedLimitRenderer
+from openpilot.selfdrive.ui.sunnypilot.onroad.speed_limit import METRIC_SPEED_LIMIT_DIAMETER, SpeedLimitRenderer
 from openpilot.selfdrive.ui.sunnypilot.onroad.smart_cruise_control import SmartCruiseControlRenderer
 from openpilot.selfdrive.ui.sunnypilot.onroad.turn_signal import TurnSignalController
 from openpilot.selfdrive.ui.sunnypilot.onroad.circular_alerts import CircularAlertsRenderer
 from openpilot.selfdrive.ui.sunnypilot.onroad.speed_renderer import SpeedRenderer
 from openpilot.selfdrive.ui.ui_state import ui_state, UIStatus
-from openpilot.selfdrive.ui.onroad.hud_renderer import HudRenderer, UI_CONFIG, FONT_SIZES, COLORS, CRUISE_DISABLED_CHAR
+from openpilot.selfdrive.ui.onroad.hud_renderer import HudRenderer, CRUISE_DISABLED_CHAR, UI_CONFIG
 from openpilot.system.ui.lib.application import gui_app
 from openpilot.system.ui.lib.multilang import tr
 from openpilot.system.ui.lib.text_measure import measure_text_cached
-
-SLA_ACTIVE_COLOR = rl.Color(0x91, 0x9b, 0x95, 0xff)
+from openpilot.system.ui.sunnypilot.lib.theme import theme
 
 
 class HudRendererSP(HudRenderer):
@@ -37,6 +37,7 @@ class HudRendererSP(HudRenderer):
     self.circular_alerts_renderer = CircularAlertsRenderer()
     self.speed_renderer = SpeedRenderer()
     self._torque_bar = TorqueBar(scale=3.0, always=True)
+    self._show_exp_button = False
 
     self.pcm_cruise_speed: bool = True
     self.show_icbm_status: bool = False
@@ -77,31 +78,33 @@ class HudRendererSP(HudRenderer):
     long_override = ui_state.sm['carControl'].cruiseControl.override
     self._get_icbm_status()
 
-    set_speed_width = UI_CONFIG.set_speed_width_metric if ui_state.is_metric else UI_CONFIG.set_speed_width_imperial
-    x = rect.x + 60 + (UI_CONFIG.set_speed_width_imperial - set_speed_width) // 2
-    y = rect.y + 45
+    set_speed_width = theme.SET_SPEED_WIDTH_METRIC if ui_state.is_metric else theme.SET_SPEED_WIDTH_IMPERIAL
+    speed_limit_width = UI_CONFIG.set_speed_width_metric if ui_state.is_metric else UI_CONFIG.set_speed_width_imperial
+    speed_limit_visual_width = METRIC_SPEED_LIMIT_DIAMETER if ui_state.is_metric else speed_limit_width
+    x, _ = theme.hud_cluster_x(rect, set_speed_width, speed_limit_width, speed_limit_visual_width)
+    y = rect.y + theme.SET_SPEED_Y
 
-    set_speed_rect = rl.Rectangle(x, y, set_speed_width, UI_CONFIG.set_speed_height)
-    rl.draw_rectangle_rounded(set_speed_rect, 0.35, 10, COLORS.BLACK_TRANSLUCENT)
-    rl.draw_rectangle_rounded_lines_ex(set_speed_rect, 0.35, 10, 6, COLORS.BORDER_TRANSLUCENT)
+    set_speed_rect = rl.Rectangle(x, y, set_speed_width, theme.SET_SPEED_HEIGHT)
+    rl.draw_rectangle_rounded(set_speed_rect, theme.PANEL_RADIUS, 10, theme.GRAPHITE_TRANSLUCENT)
+    rl.draw_rectangle_rounded_lines_ex(set_speed_rect, theme.PANEL_RADIUS, 10, 2, theme.HAIRLINE)
 
-    max_color = COLORS.GREY
-    set_speed_color = COLORS.DARK_GREY
+    max_color = theme.MUTED
+    set_speed_color = theme.MUTED
     if self.is_cruise_set:
-      set_speed_color = COLORS.WHITE
+      set_speed_color = theme.WHITE
       if long_plan_sp.speedLimit.assist.active:
-        set_speed_color = SLA_ACTIVE_COLOR if long_override else rl.Color(0, 0xff, 0, 0xff)
-        max_color = SLA_ACTIVE_COLOR if long_override else rl.Color(0x80, 0xd8, 0xa6, 0xff)
+        set_speed_color = theme.AMBER if long_override else theme.ACCENT_SOFT
+        max_color = theme.AMBER if long_override else theme.ACCENT
       else:
         if ui_state.status == UIStatus.ENGAGED:
-          max_color = COLORS.ENGAGED
+          max_color = theme.ACCENT
         elif ui_state.status == UIStatus.DISENGAGED:
-          max_color = COLORS.DISENGAGED
+          max_color = theme.MUTED
         elif ui_state.status == UIStatus.OVERRIDE:
-          max_color = COLORS.OVERRIDE
+          max_color = theme.AMBER
 
-    max_str_size = 60 if self.show_icbm_status else 40
-    max_str_y = 15 if self.show_icbm_status else 27
+    max_str_size = 52 if self.show_icbm_status else 34
+    max_str_y = 14 if self.show_icbm_status else 24
 
     max_text = str(round(self.speed_cluster)) if self.show_icbm_status else tr("MAX")
     max_text_width = measure_text_cached(self._font_semi_bold, max_text, max_str_size).x
@@ -115,12 +118,12 @@ class HudRendererSP(HudRenderer):
     )
 
     set_speed_text = CRUISE_DISABLED_CHAR if not self.is_cruise_set else str(round(self.set_speed))
-    speed_text_width = measure_text_cached(self._font_bold, set_speed_text, FONT_SIZES.set_speed).x
+    speed_text_width = measure_text_cached(self._font_bold, set_speed_text, 84).x
     rl.draw_text_ex(
       self._font_bold,
       set_speed_text,
-      rl.Vector2(x + (set_speed_width - speed_text_width) / 2, y + 77),
-      FONT_SIZES.set_speed,
+      rl.Vector2(x + (set_speed_width - speed_text_width) / 2, y + 68),
+      84,
       0,
       set_speed_color,
     )

@@ -52,7 +52,7 @@ msgstr "<br><br>Калібрування затримки кермування �
 msgid "ADD"
 msgstr "ДОДАТИ"
 
-#: system/ui/widgets/network.py
+#: openpilot/system/ui/widgets/network.py
 msgid "APN Setting"
 msgstr "Налаштування APN"
 
@@ -60,7 +60,7 @@ msgstr "Налаштування APN"
 msgid "Acknowledge Excessive Actuation"
 msgstr "Визнайте надмірне спрацьовування"
 
-#: system/ui/widgets/network.py
+#: openpilot/system/ui/widgets/network.py
 msgid "Advanced"
 msgstr "Розширені"
 
@@ -93,7 +93,7 @@ msgid "Are you sure you want to uninstall?"
 msgstr "Ви впевнені, що хочете видалити?"
 
 #: openpilot/selfdrive/ui/layouts/onboarding.py
-#: system/ui/widgets/network.py
+#: openpilot/system/ui/widgets/network.py
 msgid "Back"
 msgstr "Назад"
 
@@ -113,27 +113,31 @@ msgstr "ЗМІНИТИ"
 msgid "CHECK"
 msgstr "ПЕРЕВІРИТИ"
 
+#: openpilot/selfdrive/ui/layouts/home.py
+msgid "CHECK ALERTS"
+msgstr ""
+
 #: openpilot/selfdrive/ui/widgets/exp_mode_button.py
 msgid "CHILL MODE ON"
 msgstr "СПОКІЙНИЙ РЕЖИМ"
 
 #: openpilot/selfdrive/ui/layouts/sidebar.py
-#: system/ui/widgets/network.py
+#: openpilot/system/ui/widgets/network.py
 msgid "CONNECT"
 msgstr "ПІДКЛЮЧИТИ"
 
-#: system/ui/widgets/network.py
+#: openpilot/system/ui/widgets/network.py
 msgid "CONNECTING..."
 msgstr "ПІДКЛЮЧА..."
 
-#: system/ui/widgets/confirm_dialog.py
-#: system/ui/widgets/keyboard.py
-#: system/ui/widgets/network.py
-#: system/ui/widgets/option_dialog.py
+#: openpilot/system/ui/widgets/confirm_dialog.py
+#: openpilot/system/ui/widgets/keyboard.py
+#: openpilot/system/ui/widgets/network.py
+#: openpilot/system/ui/widgets/option_dialog.py
 msgid "Cancel"
 msgstr "Скасувати"
 
-#: system/ui/widgets/network.py
+#: openpilot/system/ui/widgets/network.py
 msgid "Cellular Metered"
 msgstr "Лімітне стільникове з'єднання"
 
@@ -145,7 +149,7 @@ msgstr "Змінити мову"
 msgid "Changing this setting will restart sunnypilot if the car is powered on."
 msgstr ""
 
-#: system/ui/sunnypilot/widgets/sunnylink_pairing_dialog.py
+#: openpilot/system/ui/sunnypilot/widgets/sunnylink_pairing_dialog.py
 msgid "Choose your sponsorship tier and confirm your support"
 msgstr ""
 
@@ -217,7 +221,7 @@ msgstr "Камера водія"
 msgid "Driving Personality"
 msgstr "Стиль водіння"
 
-#: system/ui/widgets/network.py
+#: openpilot/system/ui/widgets/network.py
 msgid "EDIT"
 msgstr "РЕДАГ."
 
@@ -233,7 +237,7 @@ msgstr "ETH"
 msgid "EXPERIMENTAL MODE ON"
 msgstr "ЕКСПЕРИМЕНТ. РЕЖИМ"
 
-#: system/ui/sunnypilot/widgets/sunnylink_pairing_dialog.py
+#: openpilot/system/ui/sunnypilot/widgets/sunnylink_pairing_dialog.py
 msgid "Early Access: Become a sunnypilot Sponsor"
 msgstr ""
 
@@ -250,7 +254,7 @@ msgstr "Увімкнути ADB"
 msgid "Enable Lane Departure Warnings"
 msgstr "Увімкнути попередження про виїзд зі смуги"
 
-#: system/ui/widgets/network.py
+#: openpilot/system/ui/widgets/network.py
 msgid "Enable Roaming"
 msgstr "Увімкнути роумінг"
 
@@ -258,7 +262,7 @@ msgstr "Увімкнути роумінг"
 msgid "Enable SSH"
 msgstr "Увімкнути SSH"
 
-#: system/ui/widgets/network.py
+#: openpilot/system/ui/widgets/network.py
 msgid "Enable Tethering"
 msgstr "Увімкнути точку доступу"
 
@@ -274,23 +278,23 @@ msgstr ""
 msgid "Enable the sunnypilot longitudinal control (alpha) toggle to allow Experimental mode."
 msgstr ""
 
-#: system/ui/widgets/network.py
+#: openpilot/system/ui/widgets/network.py
 msgid "Enter APN"
 msgstr "Введіть APN"
 
-#: system/ui/widgets/network.py
+#: openpilot/system/ui/widgets/network.py
 msgid "Enter SSID"
 msgstr "Введіть SSID"
 
-#: system/ui/widgets/network.py
+#: openpilot/system/ui/widgets/network.py
 msgid "Enter new tethering password"
 msgstr "Введіть новий пароль для модему"
 
-#: system/ui/widgets/network.py
+#: openpilot/system/ui/widgets/network.py
 msgid "Enter password"
 msgstr "Введіть пароль"
 
-#: system/ui/sunnypilot/widgets/tree_dialog.py
+#: openpilot/system/ui/sunnypilot/widgets/tree_dialog.py
 msgid "Enter search query"
 msgstr ""
 
@@ -298,7 +302,7 @@ msgstr ""
 msgid "Enter your GitHub username"
 msgstr "Введіть ваш логін GitHub"
 
-#: system/ui/widgets/list_view.py
+#: openpilot/system/ui/widgets/list_view.py
 msgid "Error"
 msgstr "Помилка"
 
@@ -310,7 +314,7 @@ msgstr "Експериментальний режим"
 msgid "Experimental mode is currently unavailable on this car since the car's stock ACC is used for longitudinal control."
 msgstr "Експериментальний режим наразі недоступний для цього автомобіля, оскільки для поздовжнього керування використовується штатний адаптивний круїз-контроль (ACC)."
 
-#: system/ui/widgets/network.py
+#: openpilot/system/ui/widgets/network.py
 msgid "FORGETTING..."
 msgstr "ЗАБУВАЮ..."
 
@@ -326,15 +330,15 @@ msgstr "Злива"
 msgid "Firehose Mode"
 msgstr "Режим зливи"
 
-#: system/ui/sunnypilot/widgets/sunnylink_pairing_dialog.py
+#: openpilot/system/ui/sunnypilot/widgets/sunnylink_pairing_dialog.py
 msgid "Follow the prompts to complete the pairing process"
 msgstr ""
 
-#: system/ui/widgets/network.py
+#: openpilot/system/ui/widgets/network.py
 msgid "Forget"
 msgstr "Забути"
 
-#: system/ui/widgets/network.py
+#: openpilot/system/ui/widgets/network.py
 msgid "Forget Wi-Fi Network \"{}\"?"
 msgstr "Забути мережу Wi-Fi \"{}\"?"
 
@@ -350,19 +354,23 @@ msgstr "Перейдіть на сайт https://connect.comma.ai на своє�
 msgid "HIGH"
 msgstr "ВИСОКА"
 
-#: system/ui/widgets/network.py
+#: openpilot/system/ui/widgets/network.py
 msgid "Hidden Network"
 msgstr "Прихована мережа"
+
+#: openpilot/selfdrive/ui/layouts/home.py
+msgid "IGNITION REQUIRED"
+msgstr ""
 
 #: openpilot/selfdrive/ui/layouts/settings/software.py
 msgid "INSTALL"
 msgstr "ВСТАНОВ."
 
-#: system/ui/widgets/network.py
+#: openpilot/system/ui/widgets/network.py
 msgid "IP Address"
 msgstr "IP-адреса"
 
-#: system/ui/sunnypilot/widgets/sunnylink_pairing_dialog.py
+#: openpilot/system/ui/sunnypilot/widgets/sunnylink_pairing_dialog.py
 msgid "If sponsorship status was not updated, please contact a moderator on the community forum at https://community.sunnypilot.ai"
 msgstr ""
 
@@ -370,7 +378,7 @@ msgstr ""
 msgid "Install Update"
 msgstr "Встановити оновлення"
 
-#: system/ui/sunnypilot/widgets/sunnylink_pairing_dialog.py
+#: openpilot/system/ui/sunnypilot/widgets/sunnylink_pairing_dialog.py
 msgid "Join our Community Forum at https://community.sunnypilot.ai and reach out to a moderator if you have issues"
 msgstr ""
 
@@ -426,11 +434,14 @@ msgstr "Інформація про випуск відсутня."
 msgid "OFFLINE"
 msgstr "ОФЛАЙН"
 
-#: openpilot/selfdrive/ui/layouts/sidebar.py
-#: system/ui/widgets/confirm_dialog.py
-#: system/ui/widgets/html_render.py
+#: openpilot/system/ui/widgets/confirm_dialog.py
+#: openpilot/system/ui/widgets/html_render.py
 msgid "OK"
 msgstr "OK"
+
+#: openpilot/selfdrive/ui/layouts/home.py
+msgid "ON-ROAD MODE ENABLED"
+msgstr ""
 
 #: openpilot/selfdrive/ui/layouts/sidebar.py
 msgid "ONLINE"
@@ -464,7 +475,7 @@ msgstr "Підключити пристрій"
 msgid "Pair device"
 msgstr "Підключити пристрій"
 
-#: system/ui/sunnypilot/widgets/sunnylink_pairing_dialog.py
+#: openpilot/system/ui/sunnypilot/widgets/sunnylink_pairing_dialog.py
 msgid "Pair your GitHub account"
 msgstr ""
 
@@ -485,11 +496,11 @@ msgstr "Будь ласка, підключіться до Wi-Fi, щоб зав�
 msgid "Power Off"
 msgstr "Вимкнути"
 
-#: system/ui/widgets/network.py
+#: openpilot/system/ui/widgets/network.py
 msgid "Prevent large data uploads when on a metered Wi-Fi connection"
 msgstr "Запобігайте завантаженню великих обсягів даних під час використання Wi-Fi-з'єднання з обмеженим трафіком"
 
-#: system/ui/widgets/network.py
+#: openpilot/system/ui/widgets/network.py
 msgid "Prevent large data uploads when on a metered cellular connection"
 msgstr "Запобігати великим завантаженням даних під час лімітного стільникового з'єднання"
 
@@ -513,7 +524,7 @@ msgstr "Скинути"
 msgid "REVIEW"
 msgstr "ДИВИТИСЬ"
 
-#: system/ui/sunnypilot/widgets/sunnylink_pairing_dialog.py
+#: openpilot/system/ui/sunnypilot/widgets/sunnylink_pairing_dialog.py
 msgid "Re-enter the \"sunnylink\" panel to verify sponsorship status"
 msgstr ""
 
@@ -585,23 +596,31 @@ msgstr "ВИБРАТИ"
 msgid "SSH Keys"
 msgstr "SSH ключі"
 
-#: system/ui/sunnypilot/widgets/sunnylink_pairing_dialog.py
+#: openpilot/selfdrive/ui/layouts/home.py
+msgid "START ON-ROAD"
+msgstr ""
+
+#: openpilot/selfdrive/ui/layouts/home.py
+msgid "STARTING..."
+msgstr ""
+
+#: openpilot/system/ui/sunnypilot/widgets/sunnylink_pairing_dialog.py
 msgid "Scan the QR code to login to your GitHub account"
 msgstr ""
 
-#: system/ui/sunnypilot/widgets/sunnylink_pairing_dialog.py
+#: openpilot/system/ui/sunnypilot/widgets/sunnylink_pairing_dialog.py
 msgid "Scan the QR code to visit sunnyhaibin's GitHub Sponsors page"
 msgstr ""
 
-#: system/ui/widgets/network.py
+#: openpilot/system/ui/widgets/network.py
 msgid "Scanning Wi-Fi networks..."
 msgstr "Пошук мереж..."
 
-#: system/ui/sunnypilot/widgets/tree_dialog.py
+#: openpilot/system/ui/sunnypilot/widgets/tree_dialog.py
 msgid "Search"
 msgstr ""
 
-#: system/ui/widgets/option_dialog.py
+#: openpilot/system/ui/widgets/option_dialog.py
 msgid "Select"
 msgstr "Вибрати"
 
@@ -645,7 +664,7 @@ msgstr "ТЕМП"
 msgid "Target Branch"
 msgstr "Цільова гілка"
 
-#: system/ui/widgets/network.py
+#: openpilot/system/ui/widgets/network.py
 msgid "Tethering Password"
 msgstr "Пароль для точки доступу"
 
@@ -713,11 +732,11 @@ msgstr ""
 msgid "Wi-Fi"
 msgstr "Wi-Fi"
 
-#: system/ui/widgets/network.py
+#: openpilot/system/ui/widgets/network.py
 msgid "Wi-Fi Network Metered"
 msgstr "Трафік Wi-Fi"
 
-#: system/ui/widgets/network.py
+#: openpilot/system/ui/widgets/network.py
 msgid "Wrong password"
 msgstr "Невірний пароль"
 
@@ -741,7 +760,7 @@ msgstr "перевіряю..."
 msgid "comma prime"
 msgstr "comma prime"
 
-#: system/ui/widgets/network.py
+#: openpilot/system/ui/widgets/network.py
 msgid "default"
 msgstr "замовч."
 
@@ -761,7 +780,7 @@ msgstr "не вдалося перевірити оновлення"
 msgid "finalizing update..."
 msgstr "завершую..."
 
-#: system/ui/widgets/network.py
+#: openpilot/system/ui/widgets/network.py
 msgid "for \"{}\""
 msgstr "для \"{}\""
 
@@ -769,7 +788,7 @@ msgstr "для \"{}\""
 msgid "km/h"
 msgstr "км/год"
 
-#: system/ui/widgets/network.py
+#: openpilot/system/ui/widgets/network.py
 msgid "leave blank for automatic configuration"
 msgstr "залиште порожнім для автоматичного налаштування"
 
@@ -777,7 +796,7 @@ msgstr "залиште порожнім для автоматичного нал
 msgid "left"
 msgstr "вліво"
 
-#: system/ui/widgets/network.py
+#: openpilot/system/ui/widgets/network.py
 msgid "metered"
 msgstr "обмеж."
 
@@ -801,10 +820,6 @@ msgstr "вправо"
 msgid "sunnypilot Longitudinal Control (Alpha)"
 msgstr ""
 
-#: openpilot/selfdrive/ui/onroad/alert_renderer.py
-msgid "sunnypilot Unavailable"
-msgstr ""
-
 #: openpilot/selfdrive/ui/layouts/settings/toggles.py
 msgid "sunnypilot longitudinal control may come in a future update."
 msgstr ""
@@ -813,7 +828,7 @@ msgstr ""
 msgid "sunnypilot requires the device to be mounted within 4° left or right and within 5° up or 9° down."
 msgstr ""
 
-#: system/ui/widgets/network.py
+#: openpilot/system/ui/widgets/network.py
 msgid "unmetered"
 msgstr "необмеж."
 
@@ -861,13 +876,6 @@ msgstr[0] "{} хвилина тому"
 msgstr[1] "{} хвилини тому"
 msgstr[2] "{} хвилин тому"
 
-#: openpilot/selfdrive/ui/layouts/settings/firehose.py
-msgid "{} segment of your driving is in the training dataset so far."
-msgid_plural "{} segments of your driving is in the training dataset so far."
-msgstr[0] "{} сегмент вашого водіння на даний момент містяться в тренувальному наборі даних."
-msgstr[1] "{} сегменти вашого водіння на даний момент містяться в тренувальному наборі даних."
-msgstr[2] "{} сегментів вашого водіння на даний момент містяться в тренувальному наборі даних."
-
 #: openpilot/selfdrive/ui/widgets/prime.py
 msgid "✓ SUBSCRIBED"
 msgstr "✓ ПІДПИСАНО"
@@ -876,3 +884,9 @@ msgstr "✓ ПІДПИСАНО"
 msgid "🔥 Firehose Mode 🔥"
 msgstr "🌧️ Режим зливи 🌧️"
 
+#: openpilot/selfdrive/ui/mici/layouts/settings/firehose.py
+msgid "{} segment of your driving is in the training dataset so far."
+msgid_plural "{} segments of your driving is in the training dataset so far."
+msgstr[0] "{} сегмент вашого водіння на даний момент містяться в тренувальному наборі даних."
+msgstr[1] "{} сегменти вашого водіння на даний момент містяться в тренувальному наборі даних."
+msgstr[2] "{} сегментів вашого водіння на даний момент містяться в тренувальному наборі даних."

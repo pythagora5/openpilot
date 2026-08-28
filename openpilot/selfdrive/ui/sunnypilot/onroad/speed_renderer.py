@@ -11,7 +11,10 @@ from openpilot.selfdrive.ui.ui_state import ui_state
 from openpilot.system.ui.lib.application import gui_app, FontWeight
 from openpilot.system.ui.lib.multilang import tr
 from openpilot.system.ui.lib.text_measure import measure_text_cached
-from openpilot.selfdrive.ui.onroad.hud_renderer import FONT_SIZES, COLORS
+from openpilot.system.ui.sunnypilot.lib.theme import theme
+
+CURRENT_SPEED_SIZE = 164
+SPEED_UNIT_SIZE = 52
 
 
 class SpeedRenderer:
@@ -36,11 +39,11 @@ class SpeedRenderer:
 
     # Draw current speed and unit
     speed_text = str(round(self.speed))
-    speed_text_size = measure_text_cached(self._font_bold, speed_text, FONT_SIZES.current_speed)
-    speed_pos = rl.Vector2(rect.x + rect.width / 2 - speed_text_size.x / 2, 180 - speed_text_size.y / 2)
-    rl.draw_text_ex(self._font_bold, speed_text, speed_pos, FONT_SIZES.current_speed, 0, COLORS.WHITE)
+    speed_text_size = measure_text_cached(self._font_bold, speed_text, CURRENT_SPEED_SIZE)
+    speed_pos = rl.Vector2(rect.x + rect.width / 2 - speed_text_size.x / 2, rect.y + 65)
+    rl.draw_text_ex(self._font_bold, speed_text, speed_pos, CURRENT_SPEED_SIZE, 0, theme.WHITE)
 
     unit_text = tr("km/h") if ui_state.is_metric else tr("mph")
-    unit_text_size = measure_text_cached(self._font_medium, unit_text, FONT_SIZES.speed_unit)
-    unit_pos = rl.Vector2(rect.x + rect.width / 2 - unit_text_size.x / 2, 290 - unit_text_size.y / 2)
-    rl.draw_text_ex(self._font_medium, unit_text, unit_pos, FONT_SIZES.speed_unit, 0, COLORS.WHITE_TRANSLUCENT)
+    unit_text_size = measure_text_cached(self._font_medium, unit_text, SPEED_UNIT_SIZE)
+    unit_pos = rl.Vector2(rect.x + rect.width / 2 - unit_text_size.x / 2, speed_pos.y + speed_text_size.y + 2)
+    rl.draw_text_ex(self._font_medium, unit_text, unit_pos, SPEED_UNIT_SIZE, 0, theme.WHITE_SOFT)

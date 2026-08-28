@@ -1,7 +1,8 @@
-import time
+from time import monotonic
 import pyray as rl
 from dataclasses import dataclass
 from openpilot.cereal import messaging, log
+from openpilot.common.branding import FORK_NAME
 from openpilot.selfdrive.ui.ui_state import ui_state
 from openpilot.common.hardware import TICI
 from openpilot.system.ui.lib.application import gui_app, FontWeight
@@ -48,7 +49,7 @@ class Alert:
 
 # Pre-defined alert instances
 ALERT_STARTUP_PENDING = Alert(
-  text1=tr("sunnypilot Unavailable"),
+  text1=f"{FORK_NAME} is loading...",
   text2=tr("Waiting to start"),
   size=AlertSize.mid,
   status=AlertStatus.normal,
@@ -88,7 +89,7 @@ class AlertRenderer(Widget):
     # Check if selfdriveState messages have stopped arriving
     recv_frame = sm.recv_frame['selfdriveState']
     if not sm.updated['selfdriveState']:
-      time_since_onroad = time.monotonic() - ui_state.started_time
+      time_since_onroad = monotonic() - ui_state.started_time
 
       # 1. Never received selfdriveState since going onroad
       waiting_for_startup = recv_frame < ui_state.started_frame
@@ -97,7 +98,7 @@ class AlertRenderer(Widget):
 
       # 2. Lost communication with selfdriveState after receiving it
       if TICI and not waiting_for_startup:
-        ss_missing = time.monotonic() - sm.recv_time['selfdriveState']
+        ss_missing = monotonic() - sm.recv_time['selfdriveState']
         if ss_missing > SELFDRIVE_STATE_TIMEOUT:
           if ss.enabled and (ss_missing - SELFDRIVE_STATE_TIMEOUT) < SELFDRIVE_UNRESPONSIVE_TIMEOUT:
             return ALERT_CRITICAL_TIMEOUT

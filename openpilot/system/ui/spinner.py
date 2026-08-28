@@ -3,6 +3,7 @@ import pyray as rl
 import select
 import sys
 
+from openpilot.common.branding import fork_version_label
 from openpilot.system.ui.lib.application import gui_app
 from openpilot.system.ui.lib.text_measure import measure_text_cached
 from openpilot.system.ui.text import wrap_text
@@ -15,17 +16,24 @@ if gui_app.big_ui():
   TEXTURE_SIZE = 360
   WRAPPED_SPACING = 50
   CENTERED_SPACING = 150
+  BRAND_TEXTURE_WIDTH = 900
+  BRAND_TEXTURE_HEIGHT = 250
+  BRAND_BOTTOM_GAP = 40
 else:
   PROGRESS_BAR_WIDTH = 268
   PROGRESS_BAR_HEIGHT = 10
   TEXTURE_SIZE = 140
   WRAPPED_SPACING = 10
   CENTERED_SPACING = 20
+  BRAND_TEXTURE_WIDTH = 300
+  BRAND_TEXTURE_HEIGHT = 83
+  BRAND_BOTTOM_GAP = 20
 DEGREES_PER_SECOND = 360.0  # one full rotation per second
 MARGIN_H = 100
 FONT_SIZE = 96
 LINE_HEIGHT = 104
 DARKGRAY = (55, 55, 55, 255)
+BRAND_TEXTURE_VERSION = "v0.1.0"
 
 
 def clamp(value, min_value, max_value):
@@ -37,6 +45,22 @@ class Spinner(Widget):
     super().__init__()
     self._comma_texture = gui_app.texture("../../sunnypilot/selfdrive/assets/images/spinner_sunnypilot.png", TEXTURE_SIZE, TEXTURE_SIZE)
     self._spinner_texture = gui_app.texture("images/spinner_track.png", TEXTURE_SIZE, TEXTURE_SIZE, alpha_premultiply=True)
+    # The early build renderer cannot reliably measure or load fonts on-device.
+    # Render the complete wordmark as one optional texture to lock its font and
+    # alignment. Branding must never prevent the build spinner from starting.
+    self._brand_texture: rl.Texture | None = None
+    try:
+      current_version = fork_version_label()
+      if current_version != BRAND_TEXTURE_VERSION:
+        raise ValueError(f"wordmark version {BRAND_TEXTURE_VERSION} does not match {current_version}")
+
+      brand_texture = gui_app.texture("../../sunnypilot/selfdrive/assets/images/spinner_lyle_pilot.png",
+                                      BRAND_TEXTURE_WIDTH, BRAND_TEXTURE_HEIGHT)
+      if brand_texture.id == 0 or brand_texture.width != BRAND_TEXTURE_WIDTH or brand_texture.height != BRAND_TEXTURE_HEIGHT:
+        raise ValueError(f"invalid wordmark texture: {brand_texture.width}x{brand_texture.height}")
+      self._brand_texture = brand_texture
+    except Exception as e:
+      print(f"WARNING: Lyle Pilot wordmark disabled: {e}", file=sys.stderr)
     self._rotation = 0.0
     self._progress: int | None = None
     self._wrapped_lines: list[str] = []
@@ -73,6 +97,8 @@ class Spinner(Widget):
                         rl.Rectangle(center.x, center.y, TEXTURE_SIZE, TEXTURE_SIZE),
                         spinner_origin, self._rotation, rl.WHITE)
     rl.draw_texture_v(self._comma_texture, comma_position, rl.WHITE)
+    if not self._wrapped_lines:
+      self._draw_branding(center)
 
     # Display the progress bar or text based on user input
     if self._progress is not None:
@@ -86,6 +112,14 @@ class Spinner(Widget):
         text_size = measure_text_cached(gui_app.font(), line, FONT_SIZE)
         rl.draw_text_ex(gui_app.font(), line, rl.Vector2(center.x - text_size.x / 2, y_pos + i * LINE_HEIGHT),
                         FONT_SIZE, 0.0, rl.WHITE)
+
+  def _draw_branding(self, center: rl.Vector2) -> None:
+    if self._brand_texture is None:
+      return
+
+    position = rl.Vector2(center.x - BRAND_TEXTURE_WIDTH / 2,
+                          center.y - TEXTURE_SIZE / 2 - BRAND_TEXTURE_HEIGHT - BRAND_BOTTOM_GAP)
+    rl.draw_texture_v(self._brand_texture, position, rl.WHITE)
 
 
 def _read_stdin():

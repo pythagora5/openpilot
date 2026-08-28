@@ -121,6 +121,42 @@ class TestParams:
     assert self.params.get("LiveParametersV2") is None
     assert self.params.get("LiveParametersV2", return_default=True) is None
 
+  def test_tamper_params_schema(self):
+    assert self.params.get("TamperModeEnabled", return_default=True) is False
+    assert self.params.get("TamperModeSensitivity", return_default=True) == 1
+    assert self.params.get("TamperModeIncludeDriverCamera", return_default=True) is False
+    assert self.params.get("TamperModeCaptureDeadlineMono", return_default=True) == 0
+    assert self.params.get("TamperModeCaptureRequestedMono", return_default=True) == 0
+    assert self.params.get("TamperModeTestNotification", return_default=True) is False
+    assert self.params.get("TamperModeVoltageSafe", return_default=True) is False
+
+    assert self.params.get("TamperModeNtfyUrl", return_default=True) is None
+    assert self.params.get("TamperModeLastEvent", return_default=True) is None
+    assert self.params.get("TamperModeStatus", return_default=True) is None
+    assert self.params.get("TamperModeVoltageStatus", return_default=True) is None
+
+    backup_keys = self.params.all_keys(ParamKeyFlag.BACKUP)
+    dont_log_keys = self.params.all_keys(ParamKeyFlag.DONT_LOG)
+    manager_start_keys = self.params.all_keys(ParamKeyFlag.CLEAR_ON_MANAGER_START)
+
+    assert b"TamperModeEnabled" not in backup_keys
+    assert b"TamperModeNtfyUrl" not in backup_keys
+    assert b"TamperModeLastEvent" not in backup_keys
+    assert b"TamperModeSensitivity" in backup_keys
+    assert b"TamperModeIncludeDriverCamera" in backup_keys
+    assert b"TamperModeNtfyUrl" in dont_log_keys
+    assert b"TamperModeLastEvent" in dont_log_keys
+    assert b"TamperModeStatus" in dont_log_keys
+    assert b"TamperModeVoltageStatus" in dont_log_keys
+    assert b"Offroad_TamperDetected" in dont_log_keys
+    assert b"TamperModeEnabled" not in manager_start_keys
+    assert b"TamperModeStatus" in manager_start_keys
+    assert b"TamperModeVoltageSafe" in manager_start_keys
+    assert b"TamperModeVoltageStatus" in manager_start_keys
+    assert b"TamperModeCaptureDeadlineMono" in manager_start_keys
+    assert b"TamperModeCaptureRequestedMono" in manager_start_keys
+    assert b"Offroad_TamperDetected" in manager_start_keys
+
   def test_params_get_type(self):
     # json
     self.params.put("ApiCache_FirehoseStats", {"a": 0}, block=True)

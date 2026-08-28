@@ -365,12 +365,26 @@ struct CarParamsSP @0x80ae746ee2596b11 {
   }
 }
 
+struct LaneCentering {
+  state @0 :LaneCenteringState;
+  correction @1 :Float32;
+  desiredCurvature @2 :Float32;
+
+  enum LaneCenteringState {
+    disabled @0;
+    standbyE2e @1;
+    activeCentering @2;
+    paused @3;
+  }
+}
+
 struct CarControlSP @0xa5cd762cd951a455 {
   mads @0 :ModularAssistiveDrivingSystem;
   params @1 :List(Param);
   leadOne @2 :LeadData;
   leadTwo @3 :LeadData;
   intelligentCruiseButtonManagement @4 :IntelligentCruiseButtonManagement;
+  laneCentering @5 :LaneCentering;
 
   struct Param {
     key @0 :Text;

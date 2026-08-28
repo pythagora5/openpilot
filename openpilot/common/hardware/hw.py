@@ -83,6 +83,13 @@ class Paths:
       return "/data/media/0/models"
 
   @staticmethod
+  def tamper_root() -> str:
+    if PC:
+      return str(Path(Paths.comma_home()) / "media" / "0" / "tamper")
+    else:
+      return "/data/media/0/tamper"
+
+  @staticmethod
   def crash_log_root() -> str:
     if PC:
       return str(Path(Paths.comma_home()) / "community" / "crashes")

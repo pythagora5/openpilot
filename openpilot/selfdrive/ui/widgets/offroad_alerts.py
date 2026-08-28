@@ -206,6 +206,16 @@ class OffroadAlert(AbstractAlert):
     super().__init__(has_reboot_btn=False)
     self.sorted_alerts: list[AlertData] = []
 
+  def set_dismiss_callback(self, callback: Callable):
+    self.dismiss_callback = callback
+
+    def acknowledge_and_dismiss():
+      self.params.remove("Offroad_TamperDetected")
+      if self.dismiss_callback:
+        self.dismiss_callback()
+
+    self.dismiss_btn.set_click_callback(acknowledge_and_dismiss)
+
   def refresh(self):
     if not self.sorted_alerts:
       self._build_alerts()

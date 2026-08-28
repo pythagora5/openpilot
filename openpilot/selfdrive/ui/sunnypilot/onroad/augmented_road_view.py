@@ -8,10 +8,11 @@ import pyray as rl
 from openpilot.common.filter_simple import FirstOrderFilter
 from openpilot.selfdrive.ui.ui_state import UIStatus, ui_state
 from openpilot.system.ui.lib.application import gui_app
+from openpilot.system.ui.sunnypilot.lib.theme import theme
 
 BORDER_COLORS_SP = {
-  UIStatus.LAT_ONLY: rl.Color(0x00, 0xC8, 0xC8, 0xFF),  # Cyan for lateral-only state
-  UIStatus.LONG_ONLY: rl.Color(0x96, 0x1C, 0xA8, 0xFF),  # Purple for longitudinal-only state
+  UIStatus.LAT_ONLY: theme.ACCENT_SOFT,
+  UIStatus.LONG_ONLY: theme.ACCENT,
 }
 
 

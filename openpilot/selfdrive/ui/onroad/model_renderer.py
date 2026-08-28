@@ -11,6 +11,7 @@ from openpilot.selfdrive.ui.ui_state import ui_state
 from openpilot.system.ui.lib.application import gui_app
 from openpilot.system.ui.lib.shader_polygon import draw_polygon, Gradient
 from openpilot.system.ui.widgets import Widget
+from openpilot.system.ui.sunnypilot.lib.theme import theme
 
 from openpilot.selfdrive.ui.sunnypilot.onroad.model_renderer import ChevronMetrics, ModelRendererSP
 
@@ -272,8 +273,10 @@ class ModelRenderer(Widget, ChevronMetrics, ModelRendererSP):
       if lane_line.projected_points.size == 0:
         continue
 
-      alpha = np.clip(self._lane_line_probs[i], 0.0, 0.7)
-      color = rl.Color(255, 255, 255, int(alpha * 255))
+      alpha_cap = 0.52 if gui_app.sunnypilot_ui() else 0.7
+      alpha = np.clip(self._lane_line_probs[i], 0.0, alpha_cap)
+      color = rl.Color(theme.WHITE.r, theme.WHITE.g, theme.WHITE.b, int(alpha * 255)) if gui_app.sunnypilot_ui() \
+              else rl.Color(255, 255, 255, int(alpha * 255))
       draw_polygon(self._rect, lane_line.projected_points, color)
 
     for i, road_edge in enumerate(self._road_edges):
@@ -281,7 +284,8 @@ class ModelRenderer(Widget, ChevronMetrics, ModelRendererSP):
         continue
 
       alpha = np.clip(1.0 - self._road_edge_stds[i], 0.0, 1.0)
-      color = rl.Color(255, 0, 0, int(alpha * 255))
+      color = rl.Color(theme.ACCENT_SOFT.r, theme.ACCENT_SOFT.g, theme.ACCENT_SOFT.b, int(alpha * 110)) \
+              if gui_app.sunnypilot_ui() else rl.Color(255, 0, 0, int(alpha * 255))
       draw_polygon(self._rect, road_edge.projected_points, color)
 
   def _draw_path(self, sm):
@@ -294,6 +298,16 @@ class ModelRenderer(Widget, ChevronMetrics, ModelRendererSP):
 
     if ui_state.rainbow_path:
       self.rainbow_path.draw_rainbow_path(self._rect, self._path)
+      return
+
+    if gui_app.sunnypilot_ui() and not self._experimental_mode:
+      gradient = Gradient(
+        start=(0.0, 1.0),
+        end=(0.0, 0.0),
+        colors=[theme.ACCENT_DIM, rl.Color(0x3B, 0x82, 0xF6, 0x50), rl.Color(0x8C, 0xC8, 0xFF, 0x08)],
+        stops=[0.0, 0.55, 1.0],
+      )
+      draw_polygon(self._rect, self._path.projected_points, gradient=gradient)
       return
 
     if self._experimental_mode:
@@ -320,8 +334,16 @@ class ModelRenderer(Widget, ChevronMetrics, ModelRendererSP):
       if not lead.glow or not lead.chevron:
         continue
 
-      rl.draw_triangle_fan(lead.glow, len(lead.glow), rl.Color(218, 202, 37, 255))
-      rl.draw_triangle_fan(lead.chevron, len(lead.chevron), rl.Color(201, 34, 49, lead.fill_alpha))
+      if gui_app.sunnypilot_ui():
+        p0, p1, p2 = (rl.Vector2(*point) for point in lead.chevron)
+        outline = theme.AMBER if lead.fill_alpha > 170 else theme.ACCENT_SOFT
+        fill = rl.Color(theme.ACCENT.r, theme.ACCENT.g, theme.ACCENT.b, min(70, 20 + lead.fill_alpha // 5))
+        rl.draw_triangle(p0, p1, p2, fill)
+        rl.draw_line_ex(p0, p1, 5, outline)
+        rl.draw_line_ex(p1, p2, 5, outline)
+      else:
+        rl.draw_triangle_fan(lead.glow, len(lead.glow), rl.Color(218, 202, 37, 255))
+        rl.draw_triangle_fan(lead.chevron, len(lead.chevron), rl.Color(201, 34, 49, lead.fill_alpha))
 
   @staticmethod
   def _get_path_length_idx(pos_x_array: np.ndarray, path_distance: float) -> int:

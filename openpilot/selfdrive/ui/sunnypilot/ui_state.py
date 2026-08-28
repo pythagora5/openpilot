@@ -33,7 +33,8 @@ class UIStateSP:
     self.is_sp_release: bool = self.params.get_bool("IsReleaseSpBranch")
     self.sm_services_ext = [
       "modelManagerSP", "selfdriveStateSP", "longitudinalPlanSP", "backupManagerSP",
-      "gpsLocation", "liveTorqueParameters", "carStateSP", "liveMapDataSP", "carParamsSP", "liveDelay"
+      "gpsLocation", "liveTorqueParameters", "carStateSP", "liveMapDataSP", "carParamsSP", "liveDelay",
+      "carControlSP",
     ]
 
     self.sunnylink_state = SunnylinkState()
@@ -43,6 +44,8 @@ class UIStateSP:
     self.chevron_metrics = None
     self.custom_interactive_timeout: int = 0
     self.developer_ui = None
+    self.boot_offroad_mode = self.params.get("DeviceBootMode", return_default=True)
+    self.always_offroad: bool = self.params.get_bool("OffroadMode")
     self.hide_v_ego_ui: bool = False
     self.onroad_brightness: int = 0
     self.onroad_brightness_timer: int = 0

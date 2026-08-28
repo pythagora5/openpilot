@@ -6,6 +6,7 @@ import random
 import string
 from dataclasses import dataclass
 from openpilot.cereal import messaging, log
+from openpilot.common.branding import FORK_NAME
 from opendbc.car.structs import car
 from openpilot.selfdrive.ui.ui_state import ui_state
 from openpilot.common.filter_simple import BounceFilter, FirstOrderFilter
@@ -69,7 +70,7 @@ class Alert:
 
 # Pre-defined alert instances
 ALERT_STARTUP_PENDING = Alert(
-  text1="sunnypilot Unavailable",
+  text1=f"{FORK_NAME} is loading...",
   text2="Waiting to start",
   size=AlertSize.mid,
   status=AlertStatus.normal,

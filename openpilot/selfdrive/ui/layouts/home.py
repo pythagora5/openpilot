@@ -3,14 +3,14 @@ import pyray as rl
 from collections.abc import Callable
 from enum import IntEnum
 from openpilot.common.params import Params
+from openpilot.selfdrive.ui.ui_state import ui_state
 from openpilot.selfdrive.ui.widgets.offroad_alerts import UpdateAlert, OffroadAlert
 from openpilot.selfdrive.ui.widgets.exp_mode_button import ExperimentalModeButton
-from openpilot.selfdrive.ui.widgets.prime import PrimeWidget
-from openpilot.selfdrive.ui.widgets.setup import SetupWidget
 from openpilot.system.ui.lib.text_measure import measure_text_cached
 from openpilot.system.ui.lib.application import gui_app, FontWeight, MousePos
-from openpilot.system.ui.lib.multilang import tr, trn
+from openpilot.system.ui.lib.multilang import tr, trn, tr_noop
 from openpilot.system.ui.widgets.label import gui_label
+from openpilot.system.ui.widgets.button import Button, ButtonStyle
 from openpilot.system.ui.widgets import Widget
 
 HEADER_HEIGHT = 80
@@ -19,12 +19,90 @@ CONTENT_MARGIN = 40
 SPACING = 25
 RIGHT_COLUMN_WIDTH = 750
 REFRESH_INTERVAL = 10.0
+STARTUP_TIMEOUT = 5.0
+OFFROAD_REVERT_GRACE = 1.0
 
 
 class HomeLayoutState(IntEnum):
   HOME = 0
   UPDATE = 1
   ALERTS = 2
+
+
+class OnroadButtonState(IntEnum):
+  START = 0
+  IGNITION_REQUIRED = 1
+  STARTING = 2
+  CHECK_ALERTS = 3
+  ENABLED = 4
+
+
+class OnroadModeButton(Button):
+  """One-tap exit from Always Offroad without bypassing normal startup gates."""
+
+  TEXT = {
+    OnroadButtonState.START: tr_noop("START ON-ROAD"),
+    OnroadButtonState.IGNITION_REQUIRED: tr_noop("IGNITION REQUIRED"),
+    OnroadButtonState.STARTING: tr_noop("STARTING..."),
+    OnroadButtonState.CHECK_ALERTS: tr_noop("CHECK ALERTS"),
+    OnroadButtonState.ENABLED: tr_noop("ON-ROAD MODE ENABLED"),
+  }
+
+  def __init__(self, params: Params | None = None, state=None, clock=time.monotonic):
+    self.params = params or Params()
+    self.ui_state = state or ui_state
+    self.clock = clock
+    self.request_started_at: float | None = None
+    self.button_state = OnroadButtonState.ENABLED
+
+    super().__init__(self.TEXT[self.button_state], click_callback=self._request_onroad,
+                     font_size=64, button_style=ButtonStyle.PRIMARY, border_radius=22)
+    self.ui_state.add_offroad_transition_callback(self._handle_offroad_transition)
+
+  @property
+  def actionable(self) -> bool:
+    return self.button_state == OnroadButtonState.START and self.request_started_at is None
+
+  def _handle_offroad_transition(self):
+    if self.ui_state.started:
+      self.request_started_at = None
+
+  def _request_onroad(self):
+    if not self.actionable:
+      return
+
+    self.request_started_at = self.clock()
+    # Reflect the requested state immediately; the UI params worker reconciles it
+    # with the authoritative value on its next refresh.
+    self.ui_state.always_offroad = False
+    self.params.put_bool("OffroadMode", False)
+
+  def _get_button_state(self) -> OnroadButtonState:
+    now = self.clock()
+    if self.request_started_at is not None:
+      elapsed = now - self.request_started_at
+      if self.ui_state.started:
+        self.request_started_at = None
+        return OnroadButtonState.ENABLED
+      if not self.ui_state.ignition:
+        self.request_started_at = None
+      elif self.ui_state.always_offroad and elapsed >= OFFROAD_REVERT_GRACE:
+        self.request_started_at = None
+      elif elapsed >= STARTUP_TIMEOUT:
+        return OnroadButtonState.CHECK_ALERTS
+      else:
+        return OnroadButtonState.STARTING
+
+    if self.ui_state.always_offroad:
+      return OnroadButtonState.START if self.ui_state.ignition else OnroadButtonState.IGNITION_REQUIRED
+    return OnroadButtonState.STARTING if self.ui_state.ignition else OnroadButtonState.ENABLED
+
+  def _update_state(self):
+    self.button_state = self._get_button_state()
+    self.set_text(tr(self.TEXT[self.button_state]))
+    self.set_enabled(self.actionable)
+    self.set_button_style(ButtonStyle.PRIMARY if self.enabled else ButtonStyle.NO_EFFECT)
+    super()._update_state()
 
 
 class HomeLayout(Widget):
@@ -49,16 +127,13 @@ class HomeLayout(Widget):
 
     self.header_rect = rl.Rectangle(0, 0, 0, 0)
     self.content_rect = rl.Rectangle(0, 0, 0, 0)
-    self.left_column_rect = rl.Rectangle(0, 0, 0, 0)
     self.right_column_rect = rl.Rectangle(0, 0, 0, 0)
 
     self.update_notif_rect = rl.Rectangle(0, 0, 200, HEADER_HEIGHT - 10)
     self.alert_notif_rect = rl.Rectangle(0, 0, 220, HEADER_HEIGHT - 10)
 
-    self._prime_widget = PrimeWidget()
-    self._setup_widget = SetupWidget()
-
     self._exp_mode_button = ExperimentalModeButton()
+    self._onroad_mode_button = OnroadModeButton()
     self._setup_callbacks()
 
   def show_event(self):
@@ -116,12 +191,11 @@ class HomeLayout(Widget):
       self._rect.x + CONTENT_MARGIN, content_y, self._rect.width - 2 * CONTENT_MARGIN, content_height
     )
 
-    left_width = self.content_rect.width - RIGHT_COLUMN_WIDTH - SPACING
-
-    self.left_column_rect = rl.Rectangle(self.content_rect.x, self.content_rect.y, left_width, self.content_rect.height)
-
     self.right_column_rect = rl.Rectangle(
-      self.content_rect.x + left_width + SPACING, self.content_rect.y, RIGHT_COLUMN_WIDTH, self.content_rect.height
+      self.content_rect.x + self.content_rect.width - RIGHT_COLUMN_WIDTH,
+      self.content_rect.y,
+      RIGHT_COLUMN_WIDTH,
+      self.content_rect.height,
     )
 
     self.update_notif_rect.x = self.header_rect.x
@@ -181,7 +255,6 @@ class HomeLayout(Widget):
     gui_label(version_rect, self._version_text, 48, rl.WHITE, alignment=rl.GuiTextAlignment.TEXT_ALIGN_RIGHT)
 
   def _render_home_content(self):
-    self._render_left_column()
     self._render_right_column()
 
   def _render_update_view(self):
@@ -190,9 +263,6 @@ class HomeLayout(Widget):
   def _render_alerts_view(self):
     self.offroad_alert.render(self.content_rect)
 
-  def _render_left_column(self):
-    self._prime_widget.render(self.left_column_rect)
-
   def _render_right_column(self):
     exp_height = 125
     exp_rect = rl.Rectangle(
@@ -200,13 +270,13 @@ class HomeLayout(Widget):
     )
     self._exp_mode_button.render(exp_rect)
 
-    setup_rect = rl.Rectangle(
+    onroad_rect = rl.Rectangle(
       self.right_column_rect.x,
       self.right_column_rect.y + exp_height + SPACING,
       self.right_column_rect.width,
       self.right_column_rect.height - exp_height - SPACING,
     )
-    self._setup_widget.render(setup_rect)
+    self._onroad_mode_button.render(onroad_rect)
 
   def _refresh(self):
     self._version_text = self._get_version_text()

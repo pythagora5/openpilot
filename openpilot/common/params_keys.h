@@ -237,8 +237,29 @@ inline static std::unordered_map<std::string, ParamKeyAttributes> keys = {
     {"LaneTurnValue", {PERSISTENT | BACKUP, FLOAT, "19.0"}},
     {"PlanplusControl", {PERSISTENT | BACKUP, FLOAT, "1.0"}},
 
+    // Lyle Pilot lane centering
+    {"LaneCentering", {PERSISTENT | BACKUP, BOOL, "0"}},
+    {"LaneCenterOffset", {PERSISTENT | BACKUP, FLOAT, "0.0"}},
+    {"LaneCenteringE2EAuthority", {PERSISTENT | BACKUP, FLOAT, "1.0"}},
+    {"LaneCenteringPauseOnSignal", {PERSISTENT | BACKUP, BOOL, "1"}},
+
+    // Lyle Pilot tamper mode
+    {"Offroad_TamperDetected", {CLEAR_ON_MANAGER_START | DONT_LOG, JSON}},
+    {"TamperModeCaptureDeadlineMono", {CLEAR_ON_MANAGER_START | DONT_LOG, INT, "0"}},
+    {"TamperModeCaptureRequestedMono", {CLEAR_ON_MANAGER_START | DONT_LOG, INT, "0"}},
+    {"TamperModeEnabled", {PERSISTENT, BOOL, "0"}},
+    {"TamperModeIncludeDriverCamera", {PERSISTENT | BACKUP, BOOL, "0"}},
+    {"TamperModeLastEvent", {PERSISTENT | DONT_LOG, JSON}},
+    {"TamperModeNtfyUrl", {PERSISTENT | DONT_LOG, STRING}},
+    {"TamperModeSensitivity", {PERSISTENT | BACKUP, INT, "1"}},
+    {"TamperModeStatus", {CLEAR_ON_MANAGER_START | DONT_LOG, JSON}},
+    {"TamperModeTestNotification", {CLEAR_ON_MANAGER_START | DONT_LOG, BOOL, "0"}},
+    {"TamperModeVoltageSafe", {CLEAR_ON_MANAGER_START | DONT_LOG, BOOL, "0"}},
+    {"TamperModeVoltageStatus", {CLEAR_ON_MANAGER_START | DONT_LOG, JSON}},
+
     // mapd
     {"MapAdvisorySpeedLimit", {CLEAR_ON_ONROAD_TRANSITION, FLOAT}},
+    {"MapdHealth", {CLEAR_ON_MANAGER_START | CLEAR_ON_ONROAD_TRANSITION | DONT_LOG, STRING, "starting"}},
     {"MapdVersion", {PERSISTENT, STRING}},
     {"MapSpeedLimit", {CLEAR_ON_ONROAD_TRANSITION, FLOAT, "0.0"}},
     {"NextMapSpeedLimit", {CLEAR_ON_ONROAD_TRANSITION, JSON}},
