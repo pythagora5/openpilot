@@ -1,8 +1,12 @@
+from openpilot.common.basedir import BASEDIR
+from openpilot.selfdrive.ui.layouts.settings import toggles as tamper_toggles
 from openpilot.selfdrive.ui.layouts.settings.toggles import (
+  TAMPER_VOLTAGE_DESCRIPTION_TEXT,
   normalize_tamper_sensitivity, ntfy_test_enabled, ntfy_test_result_text, ntfy_test_result_visible,
   ntfy_url_configured, store_ntfy_url, tamper_status_text, tamper_voltage_description, tamper_voltage_status_is_stale,
   tamper_voltage_text,
 )
+from openpilot.selfdrive.ui.translations.potools import extract_strings
 
 
 class FakeParams:
@@ -130,6 +134,23 @@ def test_tamper_voltage_description_uses_shared_gate_thresholds():
   assert "12.4 V" in tamper_voltage_description()
   assert "60 seconds" in tamper_voltage_description()
   assert "12.1 V" in tamper_voltage_description()
+
+
+def test_tamper_voltage_description_is_extractable_python_format():
+  entries = {
+    entry.msgid: entry
+    for entry in extract_strings(["openpilot/selfdrive/ui/layouts/settings/toggles.py"], BASEDIR)
+  }
+  assert TAMPER_VOLTAGE_DESCRIPTION_TEXT in entries
+  assert "python-format" in entries[TAMPER_VOLTAGE_DESCRIPTION_TEXT].flags
+
+
+def test_tamper_voltage_formatting_falls_back_from_invalid_translation(monkeypatch):
+  monkeypatch.setattr(tamper_toggles, "tr", lambda _: "{missing}")
+  assert tamper_voltage_text(FakeParams({
+    "TamperModeVoltageStatus": {"state": "safe", "voltageMv": 12600},
+  })) == "12.6 V / OK"
+  assert "12.4 V" in tamper_voltage_description()
 
 
 def test_ntfy_test_results_are_actionable_and_do_not_expose_topic():

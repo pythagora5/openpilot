@@ -7,6 +7,7 @@ implementations for extracting, creating, and updating .po files.
 import ast
 import os
 import re
+import string
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -225,6 +226,10 @@ def extract_strings(files: list[str], basedir: str) -> list[POEntry]:
         if not node.args or not isinstance(node.args[0], ast.Constant) or not isinstance(node.args[0].value, str):
           continue
         msgid = node.args[0].value
+        try:
+          is_flagged = is_flagged or any(field_name is not None for _, field_name, _, _ in string.Formatter().parse(msgid))
+        except ValueError:
+          pass
         if msgid in seen:
           if ref not in seen[msgid].source_refs:
             seen[msgid].source_refs.append(ref)

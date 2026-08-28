@@ -51,6 +51,10 @@ TAMPER_VOLTAGE_TEXT = {
   "voltage": tr_noop("{voltage:.1f} V"),
   "waiting": tr_noop("Waiting for data"),
 }
+TAMPER_VOLTAGE_DESCRIPTION_TEXT = tr_noop(
+  "Shows the lower of the instantaneous and smoothed voltage readings used by the safety gate. "  # noqa: ISC002
+  "Monitoring requires at least {arm_voltage:.1f} V continuously for {arm_duration:d} seconds and disarms below {disarm_voltage:.1f} V."
+)
 NTFY_TEST_RESULT_TEXT = {
   "success": tr_noop("Test notification sent. Confirm it arrived in your ntfy app."),
   "invalid_url": tr_noop("The saved ntfy topic URL is invalid. Enter a complete HTTPS topic URL."),
@@ -140,6 +144,13 @@ def tamper_status_text(params: Params, started: bool = False, process_running: b
   return TAMPER_STATUS_TEXT.get(state, TAMPER_STATUS_TEXT["starting"])
 
 
+def _translated_format(template: str, **values: object) -> str:
+  try:
+    return tr(template).format(**values)
+  except (AttributeError, IndexError, KeyError, TypeError, ValueError):
+    return template.format(**values)
+
+
 def tamper_voltage_text(params: Params, now_mono: float | None = None) -> str:
   status = params.get("TamperModeVoltageStatus") or {}
   if not isinstance(status, dict):
@@ -159,28 +170,26 @@ def tamper_voltage_text(params: Params, now_mono: float | None = None) -> str:
     return tr(TAMPER_VOLTAGE_TEXT["waiting"])
   voltage = float(voltage_mv) / 1000.
   if state == "below_disarm" and isinstance(disarm_voltage_mv, (int, float)) and not isinstance(disarm_voltage_mv, bool):
-    return tr(TAMPER_VOLTAGE_TEXT["below_disarm"]).format(
+    return _translated_format(TAMPER_VOLTAGE_TEXT["below_disarm"],
       voltage=voltage, threshold=float(disarm_voltage_mv) / 1000.,
     )
   if state == "below_threshold" and isinstance(arm_voltage_mv, (int, float)) and not isinstance(arm_voltage_mv, bool):
-    return tr(TAMPER_VOLTAGE_TEXT["below_threshold"]).format(
+    return _translated_format(TAMPER_VOLTAGE_TEXT["below_threshold"],
       voltage=voltage, threshold=float(arm_voltage_mv) / 1000.,
     )
   if state == "arming":
     remaining_s = status.get("remainingS")
     if isinstance(remaining_s, int) and not isinstance(remaining_s, bool) and remaining_s >= 0:
-      return tr(TAMPER_VOLTAGE_TEXT["arming"]).format(voltage=voltage, remaining=remaining_s)
+      return _translated_format(TAMPER_VOLTAGE_TEXT["arming"], voltage=voltage, remaining=remaining_s)
     return tr(TAMPER_VOLTAGE_TEXT["timing_unavailable"])
   if state == "safe":
-    return tr(TAMPER_VOLTAGE_TEXT["safe"]).format(voltage=voltage)
-  return tr(TAMPER_VOLTAGE_TEXT["voltage"]).format(voltage=voltage)
+    return _translated_format(TAMPER_VOLTAGE_TEXT["safe"], voltage=voltage)
+  return _translated_format(TAMPER_VOLTAGE_TEXT["voltage"], voltage=voltage)
 
 
 def tamper_voltage_description() -> str:
-  return tr(
-    "Shows the lower of the instantaneous and smoothed voltage readings used by the safety gate. " +
-    "Monitoring requires at least {arm_voltage:.1f} V continuously for {arm_duration:d} seconds and disarms below {disarm_voltage:.1f} V."
-  ).format(
+  return _translated_format(
+    TAMPER_VOLTAGE_DESCRIPTION_TEXT,
     arm_voltage=TAMPER_ARM_VOLTAGE_MV / 1000.,
     arm_duration=int(TAMPER_ARM_DURATION_S),
     disarm_voltage=TAMPER_DISARM_VOLTAGE_MV / 1000.,

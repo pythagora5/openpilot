@@ -50,6 +50,7 @@ msgstr ""
 msgid "Error"
 msgstr ""
 
+#: openpilot/selfdrive/ui/layouts/settings/toggles.py
 #: openpilot/system/ui/widgets/confirm_dialog.py
 #: openpilot/system/ui/widgets/html_render.py
 msgid "OK"
@@ -95,6 +96,7 @@ msgstr ""
 msgid "Enable Tethering"
 msgstr ""
 
+#: openpilot/selfdrive/ui/layouts/settings/toggles.py
 #: openpilot/system/ui/widgets/network.py
 msgid "EDIT"
 msgstr ""
@@ -592,6 +594,122 @@ msgid " Steering torque response calibration is {}% complete."
 msgstr ""
 
 #: openpilot/selfdrive/ui/layouts/settings/toggles.py
+msgid "Shows the lower of the instantaneous and smoothed voltage readings used by the safety gate. Monitoring requires at least {arm_voltage:.1f} V continuously for {arm_duration:d} seconds and disarms below {disarm_voltage:.1f} V."
+msgstr ""
+
+#: openpilot/selfdrive/ui/layouts/settings/toggles.py
+msgid "Disabled"
+msgstr ""
+
+#: openpilot/selfdrive/ui/layouts/settings/toggles.py
+msgid "Waiting for safe voltage"
+msgstr ""
+
+#: openpilot/selfdrive/ui/layouts/settings/toggles.py
+msgid "Armed"
+msgstr ""
+
+#: openpilot/selfdrive/ui/layouts/settings/toggles.py
+msgid "Calibrating"
+msgstr ""
+
+#: openpilot/selfdrive/ui/layouts/settings/toggles.py
+msgid "Capturing photos"
+msgstr ""
+
+#: openpilot/selfdrive/ui/layouts/settings/toggles.py
+msgid "Cooldown"
+msgstr ""
+
+#: openpilot/selfdrive/ui/layouts/settings/toggles.py
+msgid "Sensor unavailable"
+msgstr ""
+
+#: openpilot/selfdrive/ui/layouts/settings/toggles.py
+msgid "Starting"
+msgstr ""
+
+#: openpilot/selfdrive/ui/layouts/settings/toggles.py
+msgid "Unavailable while on-road"
+msgstr ""
+
+#: openpilot/selfdrive/ui/layouts/settings/toggles.py
+msgid "Monitor unavailable"
+msgstr ""
+
+#: openpilot/selfdrive/ui/layouts/settings/toggles.py
+msgid "Voltage gate arming"
+msgstr ""
+
+#: openpilot/selfdrive/ui/layouts/settings/toggles.py
+msgid "Rearming after signal gap"
+msgstr ""
+
+#: openpilot/selfdrive/ui/layouts/settings/toggles.py
+msgid "Voltage data unavailable"
+msgstr ""
+
+#: openpilot/selfdrive/ui/layouts/settings/toggles.py
+msgid "{voltage:.1f} V / {remaining:d} s"
+msgstr ""
+
+#: openpilot/selfdrive/ui/layouts/settings/toggles.py
+msgid "{voltage:.1f} V < {threshold:.1f} V cutoff"
+msgstr ""
+
+#: openpilot/selfdrive/ui/layouts/settings/toggles.py
+msgid "{voltage:.1f} V < {threshold:.1f} V"
+msgstr ""
+
+#: openpilot/selfdrive/ui/layouts/settings/toggles.py
+msgid "Ignition on"
+msgstr ""
+
+#: openpilot/selfdrive/ui/layouts/settings/toggles.py
+msgid "{voltage:.1f} V / OK"
+msgstr ""
+
+#: openpilot/selfdrive/ui/layouts/settings/toggles.py
+msgid "Stale data"
+msgstr ""
+
+#: openpilot/selfdrive/ui/layouts/settings/toggles.py
+msgid "Timing unavailable"
+msgstr ""
+
+#: openpilot/selfdrive/ui/layouts/settings/toggles.py
+msgid "Unavailable"
+msgstr ""
+
+#: openpilot/selfdrive/ui/layouts/settings/toggles.py
+msgid "{voltage:.1f} V"
+msgstr ""
+
+#: openpilot/selfdrive/ui/layouts/settings/toggles.py
+msgid "Waiting for data"
+msgstr ""
+
+#: openpilot/selfdrive/ui/layouts/settings/toggles.py
+msgid "Test notification sent. Confirm it arrived in your ntfy app."
+msgstr ""
+
+#: openpilot/selfdrive/ui/layouts/settings/toggles.py
+msgid "The saved ntfy topic URL is invalid. Enter a complete HTTPS topic URL."
+msgstr ""
+
+#: openpilot/selfdrive/ui/layouts/settings/toggles.py
+msgid "Could not reach ntfy. Check the device internet connection and try again."
+msgstr ""
+
+#: openpilot/selfdrive/ui/layouts/settings/toggles.py
+msgid "ntfy rejected the test message. Check the topic or server configuration and try again."
+msgstr ""
+
+#: openpilot/selfdrive/ui/layouts/settings/toggles.py
+msgid "The test notification could not be sent. Please try again."
+msgstr ""
+
+#: openpilot/selfdrive/ui/layouts/settings/toggles.py
 msgid "When enabled, pressing the accelerator pedal will disengage sunnypilot."
 msgstr ""
 
@@ -612,11 +730,63 @@ msgid "Record and store microphone audio while driving. The audio will be includ
 msgstr ""
 
 #: openpilot/selfdrive/ui/layouts/settings/toggles.py
+msgid "Monitor parked-vehicle movement using the device accelerometer. Monitoring runs only while off-road and vehicle voltage is safely above the cutoff."
+msgstr ""
+
+#: openpilot/selfdrive/ui/layouts/settings/toggles.py
+msgid "Also attach a driver-facing photo to tamper notifications. Leave this off unless the additional cabin view is wanted."
+msgstr ""
+
+#: openpilot/selfdrive/ui/layouts/settings/toggles.py
+msgid "SET"
+msgstr ""
+
+#: openpilot/selfdrive/ui/layouts/settings/toggles.py
+msgid "ntfy Topic URL"
+msgstr ""
+
+#: openpilot/selfdrive/ui/layouts/settings/toggles.py
+msgid "Enter a complete HTTPS topic URL. Leave blank to disable notifications."
+msgstr ""
+
+#: openpilot/selfdrive/ui/layouts/settings/toggles.py
 msgid "Driving Personality"
 msgstr ""
 
 #: openpilot/selfdrive/ui/layouts/settings/toggles.py
 msgid "Changing this setting will restart sunnypilot if the car is powered on."
+msgstr ""
+
+#: openpilot/selfdrive/ui/layouts/settings/toggles.py
+msgid "Enter the complete HTTPS ntfy topic URL. Treat the topic URL like a password: anyone who knows it may receive the photos."
+msgstr ""
+
+#: openpilot/selfdrive/ui/layouts/settings/toggles.py
+msgid "Test ntfy Notification"
+msgstr ""
+
+#: openpilot/selfdrive/ui/layouts/settings/toggles.py
+msgid "Send a text-only test message to confirm this device can reach the configured ntfy topic. This does not capture photos."
+msgstr ""
+
+#: openpilot/selfdrive/ui/layouts/settings/toggles.py
+msgid "Tamper Sensitivity"
+msgstr ""
+
+#: openpilot/selfdrive/ui/layouts/settings/toggles.py
+msgid "Choose how much parked-vehicle movement is required before an alert."
+msgstr ""
+
+#: openpilot/selfdrive/ui/layouts/settings/toggles.py
+msgid "Tamper Monitoring Status"
+msgstr ""
+
+#: openpilot/selfdrive/ui/layouts/settings/toggles.py
+msgid "Shows whether monitoring is armed or waiting for the vehicle-voltage safety gate."
+msgstr ""
+
+#: openpilot/selfdrive/ui/layouts/settings/toggles.py
+msgid "Tamper Voltage Safety"
 msgstr ""
 
 #: openpilot/selfdrive/ui/layouts/settings/toggles.py
@@ -661,6 +831,22 @@ msgid "Use Metric System"
 msgstr ""
 
 #: openpilot/selfdrive/ui/layouts/settings/toggles.py
+msgid "Parked Tamper Monitoring"
+msgstr ""
+
+#: openpilot/selfdrive/ui/layouts/settings/toggles.py
+msgid "Include Driver Camera Photo"
+msgstr ""
+
+#: openpilot/selfdrive/ui/layouts/settings/toggles.py
+msgid "SENDING"
+msgstr ""
+
+#: openpilot/selfdrive/ui/layouts/settings/toggles.py
+msgid "SEND"
+msgstr ""
+
+#: openpilot/selfdrive/ui/layouts/settings/toggles.py
 msgid "sunnypilot longitudinal control may come in a future update."
 msgstr ""
 
@@ -677,7 +863,23 @@ msgid "Relaxed"
 msgstr ""
 
 #: openpilot/selfdrive/ui/layouts/settings/toggles.py
+msgid "Low"
+msgstr ""
+
+#: openpilot/selfdrive/ui/layouts/settings/toggles.py
+msgid "Medium"
+msgstr ""
+
+#: openpilot/selfdrive/ui/layouts/settings/toggles.py
+msgid "High"
+msgstr ""
+
+#: openpilot/selfdrive/ui/layouts/settings/toggles.py
 msgid "Enable the sunnypilot longitudinal control (alpha) toggle to allow Experimental mode."
+msgstr ""
+
+#: openpilot/selfdrive/ui/layouts/settings/toggles.py
+msgid "Enter a valid HTTPS ntfy topic URL without credentials, query parameters, or fragments."
 msgstr ""
 
 #: openpilot/selfdrive/ui/layouts/settings/settings.py
